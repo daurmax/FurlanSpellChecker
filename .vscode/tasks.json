@@ -1,0 +1,128 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Install package (editable)",
+            "type": "shell",
+            "command": "${config:python.defaultInterpreterPath}",
+            "args": ["-m", "pip", "install", "-e", "."],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Install dev dependencies",
+            "type": "shell", 
+            "command": "${config:python.defaultInterpreterPath}",
+            "args": ["-m", "pip", "install", "-e", ".[dev]"],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run tests",
+            "type": "shell",
+            "command": "${config:python.defaultInterpreterPath}",
+            "args": ["-m", "pytest"],
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run tests with coverage",
+            "type": "shell",
+            "command": "${config:python.defaultInterpreterPath}",
+            "args": ["-m", "pytest", "--cov=furlan_spellchecker", "--cov-report=html"],
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run type checking",
+            "type": "shell",
+            "command": "${config:python.defaultInterpreterPath}",
+            "args": ["-m", "mypy", "src"],
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run linting",
+            "type": "shell",
+            "command": "${config:python.defaultInterpreterPath}",
+            "args": ["-m", "ruff", "check", "src", "tests"],
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Format code",
+            "type": "shell",
+            "command": "${config:python.defaultInterpreterPath}",
+            "args": ["-m", "black", "src", "tests"],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run CLI help",
+            "type": "shell",
+            "command": "${config:python.defaultInterpreterPath}",
+            "args": ["-m", "furlan_spellchecker.cli.app", "--help"],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Build package",
+            "type": "shell",
+            "command": "${config:python.defaultInterpreterPath}",
+            "args": ["-m", "build"],
+            "group": "build",
+            "presentation": {
+                "reveal": "always", 
+                "panel": "new"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Clean build artifacts",
+            "type": "shell",
+            "command": "${workspaceFolder}/scripts/clean.sh",
+            "windows": {
+                "command": "powershell",
+                "args": ["-File", "${workspaceFolder}/scripts/clean.ps1"]
+            },
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": []
+        }
+    ]
+}
