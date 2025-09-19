@@ -1,0 +1,34 @@
+{
+  "artifacts": [
+    {
+      "name": "elisions",
+      "url": "",
+      "sha256": "e9e1bd2743d50bbd2e58f9df7790812b79176bc0ca1c01998b0ea537e8b5fc9d",
+      "split": false
+    },
+    {
+      "name": "errors",
+      "url": "",
+      "sha256": "117682849003a3ab4404dc9db858f2f0603423ffee60b42cc7a28824c1d18446",
+      "split": false
+    },
+    {
+      "name": "frequencies",
+      "url": "",
+      "sha256": "dbb692a4ddb55ce09dee8ae5cd7a1f87e9decace3be95b1a690e283b804c145d",
+      "split": false
+    },
+    {
+      "name": "words_database",
+      "url": "",
+      "sha256": "d920f09a7dde23a28738177d3824438ec19b8f022f3dc4646e8ff49f37e0771d",
+      "split": false
+    },
+    {
+      "name": "words_radix_tree",
+      "url": "",
+      "sha256": "bad476aec09263ef5612990e5b3b782a50fccf2d452f2ec8d3d6ab79fbabce00",
+      "split": false
+    }
+  ]
+}
