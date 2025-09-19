@@ -13,6 +13,8 @@ from ..services import SpellCheckPipeline, IOService
 from ..dictionary import Dictionary
 from ..services.dictionary_manager import DictionaryManager
 from ..config.manager import ConfigManager
+from ..database import DatabaseManager, DictionaryType
+from ..config.schemas import FurlanSpellCheckerConfig
 
 
 @click.group()
@@ -114,6 +116,130 @@ def download_dicts(yes: bool, cache_dir: Optional[str]) -> None:
         raise
 
 
+@main.command("db-status")
+@click.option(
+    "--cache-dir",
+    type=click.Path(),
+    default=None,
+    help="Override default cache directory to check",
+)
+def db_status(cache_dir: Optional[str]) -> None:
+    """Check status of database files."""
+    # Load config and override cache dir if provided
+    cfg = ConfigManager.load()
+    config = FurlanSpellCheckerConfig()
+    
+    if cache_dir:
+        config.dictionary.cache_directory = cache_dir
+    elif cfg.get("dictionary_cache_dir"):
+        config.dictionary.cache_directory = cfg["dictionary_cache_dir"]
+    
+    db_manager = DatabaseManager(config)
+    
+    # Check availability
+    availability = db_manager.ensure_databases_available()
+    missing = db_manager.get_missing_databases()
+    
+    click.echo("Database Status:")
+    click.echo("=" * 50)
+    click.echo(f"Cache directory: {db_manager._cache_dir}")
+    
+    for db_type in DictionaryType:
+        is_available = availability.get(db_type, False)
+        status = "✓ Available" if is_available else "✗ Missing"
+        click.echo(f"{db_type.value:20} {status}")
+        
+        if db_type in missing:
+            click.echo(f"  Expected at: {missing[db_type]}")
+    
+    click.echo()
+    if missing:
+        click.echo(f"Missing {len(missing)} required databases.")
+        click.echo("Run 'furlan-spellchecker download-dicts' to install them.")
+    else:
+        click.echo("All required databases are available!")
+
+
+@main.command("extract-dicts")
+@click.option(
+    "--cache-dir",
+    type=click.Path(), 
+    default=None,
+    help="Override default cache directory",
+)
+def extract_dicts(cache_dir: Optional[str]) -> None:
+    """Extract dictionary ZIP files from data/databases/ to cache directory."""
+    cfg = ConfigManager.load()
+    cache_path = cache_dir or cfg.get("dictionary_cache_dir")
+    
+    manager = DictionaryManager(cache_dir=cache_path)
+    
+    click.echo("Checking for ZIP files in data/databases/...")
+    
+    # Check for local ZIP files
+    repo_data_dir = Path.cwd() / "data" / "databases"
+    if not repo_data_dir.exists():
+        click.echo(f"Directory not found: {repo_data_dir}")
+        click.echo("Make sure you're running from the repository root.")
+        return
+    
+    zip_files = list(repo_data_dir.glob("*.zip"))
+    if not zip_files:
+        click.echo("No ZIP files found in data/databases/")
+        return
+    
+    click.echo(f"Found {len(zip_files)} ZIP files:")
+    for zip_file in zip_files:
+        click.echo(f"  - {zip_file.name}")
+    
+    # Create manifest for local files
+    import hashlib
+    artifacts = []
+    
+    for zip_file in zip_files:
+        name = zip_file.stem  # Remove .zip extension
+        sha256 = hashlib.sha256(zip_file.read_bytes()).hexdigest()
+        url = zip_file.as_uri()  # file:// URL
+        
+        artifacts.append({
+            "name": name,
+            "url": url,
+            "sha256": sha256,
+            "split": False
+        })
+    
+    manifest = {"artifacts": artifacts}
+    
+    click.echo("\nExtracting ZIP files...")
+    try:
+        installed = manager.install_from_manifest(manifest)
+        click.echo(f"Successfully extracted {len(installed)} archives:")
+        for path in installed:
+            click.echo(f"  - {path}")
+        
+        # Update config
+        if cache_path:
+            cfg["dictionary_cache_dir"] = str(cache_path)
+            ConfigManager.save(cfg)
+        
+        # Check database status after extraction
+        click.echo("\nChecking database status...")
+        config = FurlanSpellCheckerConfig()
+        config.dictionary.cache_directory = cache_path or config.dictionary.cache_directory
+        
+        db_manager = DatabaseManager(config)
+        availability = db_manager.ensure_databases_available()
+        
+        available_count = sum(1 for available in availability.values() if available)
+        total_count = len(availability)
+        
+        click.echo(f"Databases available: {available_count}/{total_count}")
+        
+    except Exception as e:
+        click.echo(f"Error extracting dictionaries: {e}", err=True)
+        raise
+
+
 @main.command()
 @click.argument("word", type=str)
 @click.option(
@@ -164,26 +290,32 @@ def suggest(word: str, dictionary: Optional[str], max_suggestions: int) -> None:
 )
 def lookup(word: str, dictionary: Optional[str]) -> None:
     """Check if a word is in the dictionary."""
-    # Initialize pipeline
-    dict_obj = Dictionary()
-    if dictionary:
-        dict_obj.load_dictionary(dictionary)
+    # Load config and initialize database-integrated spell checker
+    cfg = ConfigManager.load()
+    config = FurlanSpellCheckerConfig()
     
-    pipeline = SpellCheckPipeline(dictionary=dict_obj)
+    if dictionary:
+        config.dictionary.main_dictionary_path = dictionary
+    
+    db_manager = DatabaseManager(config)
     
     # Check word
     try:
-        result = asyncio.run(pipeline.check_word(word))
+        from ..spellchecker import FurlanSpellChecker
+        from ..phonetic import FurlanPhoneticAlgorithm
+        from ..entities import ProcessedWord
         
-        if result["is_correct"]:
+        spell_checker = FurlanSpellChecker(db_manager, FurlanPhoneticAlgorithm())
+        processed_word = ProcessedWord(word)
+        
+        result = asyncio.run(spell_checker.check_word(processed_word))
+        
+        if processed_word.correct:
             click.echo(f"✓ '{word}' is correct")
         else:
             click.echo(f"✗ '{word}' is not found in dictionary")
             
-            if result["suggestions"]:
-                click.echo("Suggestions:")
-                for suggestion in result["suggestions"]:
-                    click.echo(f"  - {suggestion}")
+            # TODO: Add suggestion functionality when implemented
                     
     except Exception as e:
         click.echo(f"Error checking word: {e}", err=True)

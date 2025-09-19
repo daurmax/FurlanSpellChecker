@@ -34,6 +34,28 @@ class FurlanPhoneticAlgorithm(IPhoneticAlgorithm):
         except Exception as e:
             raise PhoneticAlgorithmError(f"Failed to generate phonetic code for '{word}': {e}")
 
+    def get_phonetic_hashes_by_word(self, word: str) -> tuple[str, str]:
+        """Get phonetic hashes for database lookups.
+        
+        Returns two hash variations used for dictionary lookups.
+        """
+        if not word:
+            return "", ""
+        
+        try:
+            # Get primary phonetic code
+            primary_hash = self.get_phonetic_code(word)
+            
+            # Generate secondary hash variant (simplified for now)
+            # TODO: Implement proper secondary hash generation based on C# logic
+            normalized_word = self._normalize_word(word)
+            secondary_hash = f"{primary_hash}_alt"
+            
+            return primary_hash, secondary_hash
+            
+        except Exception as e:
+            raise PhoneticAlgorithmError(f"Failed to generate phonetic hashes for '{word}': {e}")
+
     def are_phonetically_similar(self, word1: str, word2: str) -> bool:
         """Check if two words are phonetically similar."""
         if not word1 or not word2:

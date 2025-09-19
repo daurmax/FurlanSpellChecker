@@ -17,6 +17,9 @@ from typing import Iterable, List, Optional
 
 import urllib.request
 
+from ..database import DatabaseManager, DictionaryType
+from ..config.schemas import FurlanSpellCheckerConfig
+
 
 @dataclass
 class Artifact:
@@ -44,18 +47,17 @@ class DictionaryManager:
     @staticmethod
     def _resolve_default_cache_dir() -> Path:
         """Return a cross-platform per-user cache directory for dictionaries."""
-        from sys import platform
-
-        home = Path.home()
-        if platform == "win32":
-            return Path.home() / "AppData" / "Local" / "furlan_spellchecker" / "cache"
-        if platform == "darwin":
-            return home / "Library" / "Caches" / "furlan_spellchecker"
-        # assume linux-like
-        xdg = os.environ.get("XDG_CACHE_HOME")
-        if xdg:
-            return Path(xdg) / "furlan_spellchecker"
-        return home / ".cache" / "furlan_spellchecker"
+        import platform
+        
+        system = platform.system()
+        if system == "Windows":
+            cache_dir = Path.home() / "AppData" / "Local" / "FurlanSpellChecker"
+        elif system == "Darwin":  # macOS
+            cache_dir = Path.home() / "Library" / "Caches" / "FurlanSpellChecker"
+        else:  # Linux and other Unix-like
+            cache_dir = Path.home() / ".cache" / "FurlanSpellChecker"
+        
+        return cache_dir
 
     def _download(self, url: str, target: Path, retries: int = 3) -> None:
         """Download a file to target path with simple retry logic."""
@@ -191,3 +193,19 @@ class DictionaryManager:
             p = self.ensure_artifact_installed(art)
             installed.append(p)
         return installed
+
+    def check_database_availability(self) -> dict:
+        """Check which databases are available after extraction."""
+        config = FurlanSpellCheckerConfig()
+        config.dictionary.cache_directory = str(self.cache_dir)
+        
+        db_manager = DatabaseManager(config)
+        return db_manager.ensure_databases_available()
+    
+    def get_missing_databases(self) -> dict:
+        """Get list of missing databases that need to be installed."""
+        config = FurlanSpellCheckerConfig() 
+        config.dictionary.cache_directory = str(self.cache_dir)
+        
+        db_manager = DatabaseManager(config)
+        return db_manager.get_missing_databases()
