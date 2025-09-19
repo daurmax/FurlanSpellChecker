@@ -11,6 +11,8 @@ import click
 
 from ..services import SpellCheckPipeline, IOService
 from ..dictionary import Dictionary
+from ..services.dictionary_manager import DictionaryManager
+from ..config.manager import ConfigManager
 
 
 @click.group()
@@ -67,6 +69,49 @@ def check(text: str, dictionary: Optional[str], output: Optional[str], format: s
         click.echo(f"Results written to: {output}")
     else:
         click.echo(output_content)
+
+
+
+@main.command("download-dicts")
+@click.option(
+    "--yes",
+    "-y",
+    is_flag=True,
+    default=False,
+    help="Automatically accept download prompts",
+)
+@click.option(
+    "--cache-dir",
+    type=click.Path(),
+    default=None,
+    help="Override default cache directory to store dictionaries",
+)
+def download_dicts(yes: bool, cache_dir: Optional[str]) -> None:
+    """Download required dictionary artifacts using DictionaryManager."""
+    cfg = ConfigManager.load()
+    # allow CLI override
+    cache_path = cache_dir or cfg.get("dictionary_cache_dir")
+
+    manager = DictionaryManager(cache_dir=cache_path)
+
+    # simple prompt
+    if not yes:
+        click.echo("Dictionaries are required but not present. This will download ~100+ MB.")
+        ok = click.confirm("Do you want to download now?", default=True)
+        if not ok:
+            click.echo("Aborted by user.")
+            return
+
+    try:
+        manager.install_from_manifest()
+        click.echo("Dictionaries installed successfully.")
+        # persist chosen cache dir
+        if cache_path:
+            cfg["dictionary_cache_dir"] = str(cache_path)
+            ConfigManager.save(cfg)
+    except Exception as e:
+        click.echo(f"Failed to install dictionaries: {e}", err=True)
+        raise
 
 
 @main.command()
