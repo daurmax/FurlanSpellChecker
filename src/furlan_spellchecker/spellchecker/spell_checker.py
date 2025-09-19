@@ -76,6 +76,12 @@ class FurlanSpellChecker(ISpellChecker):
             word.checked = True
             word.correct = True
             return True
+
+        # Fallback to in-memory dictionary (sample tests scenario)
+        if self._dictionary.contains_word(word_str):
+            word.checked = True
+            word.correct = True
+            return True
         
         # Check radix tree
         try:

@@ -2,6 +2,8 @@
 import os
 import pytest
 import tempfile
+import time
+import shutil
 import sqlite3
 from pathlib import Path
 
@@ -16,14 +18,36 @@ from furlan_spellchecker.config.schemas import FurlanSpellCheckerConfig, Diction
 
 @pytest.fixture
 def temp_config():
-    """Create a temporary configuration for testing."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        config = FurlanSpellCheckerConfig(
-            dictionary=DictionaryConfig(
-                cache_directory=temp_dir
-            )
-        )
+    """Create a temporary configuration for testing with robust Windows cleanup.
+
+    Using TemporaryDirectory context directly sometimes triggers PermissionError on Windows
+    because SQLite may keep the file handle a fraction of a second after context exit.
+    We implement manual cleanup with retries.
+    """
+    temp_dir = tempfile.mkdtemp()
+    config = FurlanSpellCheckerConfig(dictionary=DictionaryConfig(cache_directory=temp_dir))
+    try:
         yield config
+    finally:
+        # Retry deletion a few times if locked
+        for attempt in range(5):
+            try:
+                # Attempt rename of sqlite files to break lingering handles (Windows quirk)
+                for root, _dirs, files in os.walk(temp_dir):
+                    for f in files:
+                        if f.endswith('.sqlite'):
+                            p = os.path.join(root, f)
+                            try:
+                                os.replace(p, p + f".tmp{attempt}")
+                            except OSError:
+                                pass
+                shutil.rmtree(temp_dir)
+                break
+            except PermissionError:
+                if attempt == 4:
+                    # Give up and leak temp dir rather than failing test on Windows
+                    break
+                time.sleep(0.2)
 
 
 @pytest.fixture

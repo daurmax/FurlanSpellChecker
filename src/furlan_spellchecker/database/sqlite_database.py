@@ -54,9 +54,10 @@ class SQLiteKeyValueDatabase(IKeyValueDatabase):
     def find_in_user_errors_database(self, word: str) -> Optional[str]:
         """Find correction in user errors database."""
         db_path = self._db_paths[DictionaryType.USER_ERRORS]
-        return self._find_in_database(
-            db_path, DictionaryType.USER_ERRORS, word, search_for_errors=True
-        )
+        # User errors DB is optional; if missing just return None
+        if not db_path.exists():
+            return None
+        return self._find_in_database(db_path, DictionaryType.USER_ERRORS, word, search_for_errors=True)
     
     def find_in_system_database(self, phonetic_hash: str) -> Optional[str]:
         """Find value in system dictionary by phonetic hash."""
@@ -122,36 +123,26 @@ class SQLiteKeyValueDatabase(IKeyValueDatabase):
         try:
             with sqlite3.connect(db_path) as conn:
                 cursor = conn.cursor()
-                
-                # Get phonetic hashes for the word
                 phonetic_algo = FurlanPhoneticAlgorithm()
                 hash_a, hash_b = phonetic_algo.get_phonetic_hashes_by_word(word)
-                
-                # Handle unique hashes (if both hashes are the same, process only once)
                 hashes_to_process = [hash_a] if hash_a == hash_b else [hash_a, hash_b]
-                
+
                 for phonetic_hash in hashes_to_process:
-                    existing_word = self.find_in_user_database(phonetic_hash)
-                    
+                    # Query within the same connection to avoid nested connection handles on Windows
+                    cursor.execute("SELECT Value FROM Data WHERE Key = ?", (phonetic_hash,))
+                    row = cursor.fetchone()
+                    existing_word = row[0] if row else None
+
                     if existing_word is None:
-                        # Insert new entry
-                        cursor.execute(
-                            "INSERT INTO Data (Key, Value) VALUES (?, ?)",
-                            (phonetic_hash, word)
-                        )
+                        cursor.execute("INSERT INTO Data (Key, Value) VALUES (?, ?)", (phonetic_hash, word))
                     elif existing_word != word:
-                        # Update existing entry with comma-separated list
                         new_word_list = f"{existing_word},{word}"
-                        cursor.execute(
-                            "UPDATE Data SET Value = ? WHERE Key = ?",
-                            (new_word_list, phonetic_hash)
-                        )
+                        cursor.execute("UPDATE Data SET Value = ? WHERE Key = ?", (new_word_list, phonetic_hash))
                     else:
                         return AddWordResult.ALREADY_PRESENT
-                
+
                 conn.commit()
                 return AddWordResult.SUCCESS
-                
         except Exception:
             return AddWordResult.ERROR
     
@@ -167,6 +158,9 @@ class SQLiteKeyValueDatabase(IKeyValueDatabase):
             raise ValueError("Key cannot be null or empty")
         
         if not db_path.exists():
+            # Optional user errors DB handled earlier; others must exist
+            if dictionary_type == DictionaryType.USER_ERRORS:
+                return None
             raise FileNotFoundError(f"{dictionary_type.value} database not found at '{db_path}'")
         
         with sqlite3.connect(db_path) as conn:
