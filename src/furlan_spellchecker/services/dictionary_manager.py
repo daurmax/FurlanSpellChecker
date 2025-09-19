@@ -150,6 +150,16 @@ class DictionaryManager:
         """
         if self.manifest:
             return self.manifest
+
+        # Prefer top-level repository data manifest so release workflow is simpler
+        repo_manifest = Path.cwd() / "data" / "dicts_manifest.json"
+        if repo_manifest.exists():
+            try:
+                with repo_manifest.open("r", encoding="utf-8") as fh:
+                    return json.load(fh)
+            except Exception:
+                pass
+
         if self.manifest_path and self.manifest_path.exists():
             with open(self.manifest_path, "r", encoding="utf-8") as fh:
                 return json.load(fh)

@@ -1,3 +1,11 @@
+import sys
+from pathlib import Path
+
+# Ensure the project src/ directory is importable for tests run from repository root
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 """Test configuration for pytest."""
 
 import pytest
