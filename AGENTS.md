@@ -115,10 +115,72 @@ The project is organized into focused modules:
 ## Collaboration Guidelines
 
 ### Git Workflow
-- Use descriptive commit messages
+- Use descriptive commit messages following conventional commit format
 - Create feature branches for new functionality
 - Include tests with all new features
 - Update documentation for API changes
+
+## Git Commit Guidelines
+
+We follow strict commit message formatting for maintainability and automated changelog generation.
+
+### Commit Message Format
+```
+<type>(<scope>): <subject>
+<BLANK LINE>
+<body>
+<BLANK LINE>
+<footer>
+```
+
+**Rules:**
+- Header is mandatory, scope is optional
+- No line longer than 100 characters
+- Use imperative, present tense ("add" not "added")
+- No capitalization of first letter in subject
+- No period at end of subject
+
+### Commit Types
+- **feat**: New feature implementation
+- **fix**: Bug fixes
+- **docs**: Documentation changes only
+- **test**: Adding or modifying tests
+- **refactor**: Code restructuring without functionality changes
+- **perf**: Performance improvements
+- **style**: Code formatting, whitespace, etc.
+- **chore**: Build process, auxiliary tools, maintenance
+
+### Scope Examples
+- **core**: Core interfaces, exceptions, types
+- **spellchecker**: Main spell checking logic
+- **dictionary**: Dictionary management and data structures
+- **phonetic**: Friulian-specific phonetic algorithms
+- **services**: High-level orchestration and I/O
+- **cli**: Command-line interface
+- **tests**: Test suite modifications
+- **architecture**: Core system architecture
+- **build**: Build system and dependencies
+
+### Example Commits
+```bash
+feat(dictionary): add RadixTree implementation for performance optimization
+
+fix(phonetic): correct Friulian diacritic handling in phonetic algorithm
+
+docs(README): update installation instructions for Python 3.11+
+
+test(spellchecker): add comprehensive test suite for suggestion generation
+
+refactor(services): restructure pipeline for better error handling
+
+chore(build): update dependencies and Python version requirements
+```
+
+### Breaking Changes
+Use footer to document breaking changes:
+```
+BREAKING CHANGE: SpellChecker API changed from check_word() to check_text_async()
+```
 
 ### Code Review Focus Areas
 1. Interface compliance and design
