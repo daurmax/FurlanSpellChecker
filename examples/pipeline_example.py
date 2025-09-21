@@ -20,17 +20,18 @@ async def main() -> None:
     # Initialize dictionary
     dictionary = Dictionary()
     
-    # Load built-in basic dictionary
+    # The package no longer includes a built-in basic dictionary file. Large
+    # dictionaries are distributed separately and kept in the top-level
+    # `data/databases/` folder or delivered via GitHub Releases. Use the
+    # `DictionaryManager` to download/install them at runtime.
     try:
-        # In a real implementation, this would load from packaged data
-        basic_dict_path = Path(__file__).parent.parent / "src" / "furlan_spellchecker" / "data" / "basic_dictionary.txt"
-        if basic_dict_path.exists():
-            dictionary.load_dictionary(str(basic_dict_path))
-            print(f"Loaded dictionary with {dictionary.word_count} words")
+        candidate = Path(__file__).parent.parent / "data" / "databases" / "words_database.zip"
+        if candidate.exists():
+            print("Found database archive in 'data/databases/'. Use DictionaryManager to install it at runtime.")
         else:
-            print("Basic dictionary not found, using empty dictionary")
+            print("No bundled dictionary found; using empty dictionary")
     except Exception as e:
-        print(f"Error loading dictionary: {e}")
+        print(f"Error checking for bundled dictionaries: {e}")
 
     # Initialize pipeline
     pipeline = SpellCheckPipeline(dictionary=dictionary)

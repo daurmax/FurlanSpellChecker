@@ -13,7 +13,16 @@ from .dictionary import Dictionary, RadixTreeDictionary
 from .entities import IProcessedElement, ProcessedPunctuation, ProcessedWord
 from .phonetic import FurlanPhoneticAlgorithm
 from .services import IOService, SpellCheckPipeline
+from .services.dictionary_manager import DictionaryManager
 from .spellchecker import FurlanSpellChecker, TextProcessor
+from .database import (
+    DatabaseManager,
+    SQLiteKeyValueDatabase,
+    BinaryRadixTree,
+    RadixTreeDatabase,
+    DictionaryType,
+    AddWordResult,
+)
 from .config import (
     FurlanSpellCheckerConfig,
     DictionaryConfig,
@@ -44,6 +53,14 @@ __all__ = [
     # Services
     "SpellCheckPipeline",
     "IOService",
+    "DictionaryManager",
+    # Database
+    "DatabaseManager", 
+    "SQLiteKeyValueDatabase",
+    "BinaryRadixTree",
+    "RadixTreeDatabase",
+    "DictionaryType",
+    "AddWordResult",
     # Configuration
     "FurlanSpellCheckerConfig",
     "DictionaryConfig",

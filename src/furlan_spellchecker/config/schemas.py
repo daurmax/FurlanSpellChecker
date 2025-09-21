@@ -13,6 +13,7 @@ class DictionaryConfig:
     
     main_dictionary_path: Optional[str] = None
     user_dictionary_path: Optional[str] = None
+    cache_directory: Optional[str] = None
     auto_load_user_dict: bool = True
     max_suggestions: int = 10
     use_phonetic_suggestions: bool = True
@@ -101,6 +102,7 @@ class FurlanSpellCheckerConfig:
             "dictionary": {
                 "main_dictionary_path": self.dictionary.main_dictionary_path,
                 "user_dictionary_path": self.dictionary.user_dictionary_path,
+                "cache_directory": self.dictionary.cache_directory,
                 "auto_load_user_dict": self.dictionary.auto_load_user_dict,
                 "max_suggestions": self.dictionary.max_suggestions,
                 "use_phonetic_suggestions": self.dictionary.use_phonetic_suggestions,
