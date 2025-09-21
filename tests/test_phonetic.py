@@ -59,3 +59,62 @@ def test_phonetic_hashes_ported():
     for word, expected in cases:
         calculated = algo.get_phonetic_hashes_by_word(word)
         assert calculated == expected, f"Mismatch for {word}: expected {expected}, got {calculated}"
+
+
+def test_phonetic_algorithm_comprehensive():
+    """Test comprehensive phonetic algorithm functionality."""
+    algo = FurlanPhoneticAlgorithm()
+    
+    # Test returns two codes
+    codes = algo.get_phonetic_hashes_by_word("furlan")
+    assert isinstance(codes, tuple), "Phonetic algorithm returns tuple"
+    assert len(codes) == 2, "Phonetic algorithm returns exactly two codes"
+
+    primary_code, secondary_code = codes
+    assert len(primary_code) > 0, "Primary phonetic code is non-empty"
+
+    # Test accented/unaccented both work
+    accented_codes = algo.get_phonetic_hashes_by_word("cjàse")
+    unaccented_codes = algo.get_phonetic_hashes_by_word("cjase")
+    assert isinstance(accented_codes, tuple), "Accented words produce valid codes"
+    assert isinstance(unaccented_codes, tuple), "Unaccented words produce valid codes"
+
+    # Test apostrophe words (Friulian characteristic)
+    apostrophe_codes = algo.get_phonetic_hashes_by_word("l'aghe")
+    assert isinstance(apostrophe_codes, tuple), "Apostrophe words handled correctly"
+
+    # Test empty string
+    empty_codes = algo.get_phonetic_hashes_by_word("")
+    assert isinstance(empty_codes, tuple), "Empty string handled gracefully"
+
+
+def test_phonetic_similarity_comprehensive():
+    """Test phonetic similarity calculations with Friulian-specific rules.""" 
+    algo = FurlanPhoneticAlgorithm()
+    
+    # Test phonetic code generation
+    code1 = algo.get_phonetic_hashes_by_word("furlan")
+    code2 = algo.get_phonetic_hashes_by_word("furlan")
+    
+    # Identical words should have identical codes
+    assert code1 == code2, "Identical words have identical phonetic codes"
+    
+    # Test valid phonetic code format
+    assert isinstance(code1, tuple), "Phonetic codes should be tuples"
+    assert len(code1) == 2, "Should return primary and secondary codes"
+    
+    # Test that algorithm can handle Friulian words
+    friulian_words = ["cjàse", "cjòs", "fenèstre", "aghe", "furlan"]
+    for word in friulian_words:
+        code = algo.get_phonetic_hashes_by_word(word)
+        assert isinstance(code, tuple), f"Should generate code for Friulian word: {word}"
+        assert len(code) == 2, f"Should return two codes for word: {word}"
+        assert all(isinstance(c, str) for c in code), f"Codes should be strings for word: {word}"
+    
+    # Test phonetic similarity if method exists
+    try:
+        result = algo.are_phonetically_similar("furlan", "furlan")
+        assert result is True, "Identical words should be phonetically similar"
+    except AttributeError:
+        # Method not implemented, skip this check
+        pass

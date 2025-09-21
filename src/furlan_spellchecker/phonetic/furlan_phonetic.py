@@ -252,3 +252,5 @@ class FurlanPhoneticAlgorithm(IPhoneticAlgorithm):
             idx = original_chars.find(c)
             trans.append(sorted_chars[idx] if idx >= 0 else c)
         return "".join(trans).replace("^'s", "s")
+
+

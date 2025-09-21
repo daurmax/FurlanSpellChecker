@@ -89,6 +89,70 @@ class Dictionary(IDictionary):
         return self._loaded
 
 
+    # Encoding utilities
+    
+    @staticmethod
+    def is_utf8_encoded(text: str) -> bool:
+        """
+        Check if text appears to be UTF-8 encoded.
+        
+        Args:
+            text: Text to check
+            
+        Returns:
+            True if text appears to be UTF-8 encoded
+        """
+        try:
+            # Try encoding/decoding as UTF-8
+            text.encode('utf-8').decode('utf-8')
+            return True
+        except UnicodeError:
+            return False
+    
+    @staticmethod 
+    def detect_double_encoding(text: str) -> bool:
+        """
+        Detect if text has been double-encoded.
+        
+        Args:
+            text: Text to check
+            
+        Returns:
+            True if double encoding is detected
+        """
+        try:
+            # Try to decode as latin-1 then encode as utf-8
+            decoded = text.encode('latin-1').decode('utf-8')
+            # If this succeeds without error, likely double-encoded
+            return decoded != text
+        except (UnicodeError, UnicodeDecodeError):
+            return False
+    
+    @staticmethod
+    def normalize_encoding(text: str) -> str:
+        """
+        Normalize text encoding for consistent processing.
+        
+        Args:
+            text: Text to normalize
+            
+        Returns:
+            Normalized text
+        """
+        if not text:
+            return ""
+            
+        # Handle common encoding issues
+        if Dictionary.detect_double_encoding(text):
+            try:
+                return text.encode('latin-1').decode('utf-8')
+            except (UnicodeError, UnicodeDecodeError):
+                pass
+        
+        # Ensure UTF-8
+        return text.encode('utf-8', errors='replace').decode('utf-8')
+
+
 class RadixTreeDictionary(Dictionary):
     """Dictionary implementation using RadixTree for efficient lookups."""
 

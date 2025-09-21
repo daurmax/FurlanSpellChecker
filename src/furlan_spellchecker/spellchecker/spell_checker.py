@@ -188,3 +188,4 @@ class FurlanSpellChecker(ISpellChecker):
             if isinstance(element, ProcessedWord) and element.checked and not element.correct:
                 incorrect_words.append(element)
         return incorrect_words
+

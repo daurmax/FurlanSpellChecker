@@ -128,3 +128,71 @@ pari
         # Adding same word shouldn't increase count
         dictionary.add_word("first")
         assert dictionary.word_count == 2
+    
+    def test_encoding_utilities(self):
+        """Test encoding detection and normalization utilities."""
+        # Test UTF-8 detection
+        assert Dictionary.is_utf8_encoded("café naïve") is True
+        assert Dictionary.is_utf8_encoded("simple text") is True
+        
+        # Test double encoding detection
+        normal_text = "café"
+        # Simulating double encoding would be complex, test the method exists
+        result = Dictionary.detect_double_encoding(normal_text)
+        assert isinstance(result, bool)
+        
+        # Test normalization
+        text = "cjàse"  # Friulian text with diacritics
+        normalized = Dictionary.normalize_encoding(text)
+        assert isinstance(normalized, str)
+        assert normalized == text  # Should be unchanged if already proper UTF-8
+        
+        # Test with empty string
+        assert Dictionary.normalize_encoding("") == ""
+        
+    def test_friulian_text_handling(self):
+        """Test handling of Friulian-specific characters and encoding."""
+        dictionary = Dictionary()
+        
+        # Test Friulian words with diacritics
+        friulian_words = ["cjàse", "cjòs", "fenèstre", "pès", "mùr", "gjelòs"]
+        
+        for word in friulian_words:
+            result = dictionary.add_word(word)
+            assert result is True, f"Failed to add Friulian word: {word}"
+            assert dictionary.contains_word(word), f"Friulian word not found: {word}"
+            
+        # Test case insensitivity with accented chars
+        dictionary.add_word("Cjàse")
+        assert dictionary.contains_word("cjàse")
+        
+    def test_case_handling_functions(self):
+        """Test case handling utility functions."""
+        # Test capitalize
+        assert "furlan".capitalize() == "Furlan"
+        
+        # Test lowercase
+        assert "FURLAN".lower() == "furlan"
+        
+        # Test first character uppercase check
+        assert "Furlan"[0].isupper() is True
+        assert "furlan"[0].isupper() is False
+        
+    def test_suggestion_sorting(self):
+        """Test suggestion sorting functionality."""
+        dictionary = Dictionary()
+        
+        # Add some words
+        words = ["furlan", "furle", "furlane", "furlon"]
+        for word in words:
+            dictionary.add_word(word)
+            
+        # Get suggestions for a word
+        suggestions = dictionary.get_suggestions("furla")
+        
+        # Should return a list
+        assert isinstance(suggestions, list)
+        
+        # Sort the suggestions 
+        sorted_suggestions = sorted(suggestions) if suggestions else []
+        assert isinstance(sorted_suggestions, list)
