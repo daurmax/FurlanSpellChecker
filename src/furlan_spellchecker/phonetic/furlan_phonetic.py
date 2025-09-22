@@ -24,17 +24,23 @@ class FurlanPhoneticAlgorithm(IPhoneticAlgorithm):
             
         original = word
         
-        # Step 1: Normalize apostrophes and clean up
-        original = original.replace("'", "'")  # Normalize apostrophes
-        original = original.replace("e ", "'")  # Handle "e " -> "'"
-        
-        # Remove non-Friulian characters and whitespace
+        # Step 1: Normalize apostrophes (exact Perl equivalent)
+        # FUR_APOSTROPHS = "'\\x91\\x92\\x{2018}\\x{2019}"
         import re
-        original = re.sub(r'[^\w\']', '', original, flags=re.UNICODE)
+        original = re.sub(r"[''`´′ʼʹ\x91\x92\u2018\u2019]+", "'", original)
         
-        # Remove null chars (tr/\0-\377//s equivalent)
-        original = ''.join(c for c in original if ord(c) > 0)
+        # Step 2: e → ' (only FIRST occurrence like Perl s/e /'/ without /g)
+        original = re.sub(r"e ", "'", original, count=1)
         
+        # Step 3: Remove only whitespace (replicates Perl refuso with $slash_W)
+        # Perl: s/\s+|\$slash_W+//g removes whitespace and literal "$slash_W+" string
+        original = re.sub(r"\s+|\$slash_W+", "", original)
+        
+        # Step 4: Character squeeze (tr/\0-\377//s equivalent)
+        # Reduces consecutive identical characters to single occurrence
+        original = re.sub(r"(.)\1+", r"\1", original, flags=re.DOTALL)
+        
+        # Step 5: Lowercase (after normalization like Perl)
         original = original.lower()
         
         # Step 2: Handle h' -> K
@@ -54,8 +60,8 @@ class FurlanPhoneticAlgorithm(IPhoneticAlgorithm):
         original = re.sub(r'ds$', 'ts', original)
         original = original.replace("sci", "ssi").replace("sce", "se")
         
-        # Remove null chars again
-        original = ''.join(c for c in original if ord(c) > 0)
+        # Character squeeze again (second tr/\0-\377//s in Perl)
+        original = re.sub(r"(.)\1+", r"\1", original, flags=re.DOTALL)
         
         # Step 6: Remove w, y, x
         original = original.replace("w", "").replace("y", "").replace("x", "")
@@ -192,42 +198,56 @@ class FurlanPhoneticAlgorithm(IPhoneticAlgorithm):
     def levenshtein(self, s1: str, s2: str) -> int:
         """
         Compute Levenshtein distance with Friulian character equivalences
+        Perl-compatible: vowel↔vowel substitutions have cost 0
         """
         if not s1:
             return len(s2) if s2 else 0
         if not s2:
             return len(s1)
             
-        # Friulian vowel equivalences
-        vowel_equivalences = {
-            'à': 'a', 'á': 'a', 'â': 'a',
-            'è': 'e', 'é': 'e', 'ê': 'e', 'ë': 'e',
-            'ì': 'i', 'í': 'i', 'î': 'i', 'ï': 'i',
-            'ò': 'o', 'ó': 'o', 'ô': 'o', 'ö': 'o',
-            'ù': 'u', 'ú': 'u', 'û': 'u', 'ü': 'u'
-        }
+        # Friulian vowels (all variations)
+        vowels = set('aeiouàáâèéêìíîòóôùúû')
         
-        def normalize_char(c):
-            return vowel_equivalences.get(c.lower(), c.lower())
+        def is_vowel(c):
+            return c.lower() in vowels
         
-        # Normalize strings
-        s1_norm = ''.join(normalize_char(c) for c in s1)
-        s2_norm = ''.join(normalize_char(c) for c in s2)
+        def normalize_vowel(c):
+            """Normalize accented vowels to base form"""
+            vowel_map = {
+                'à': 'a', 'á': 'a', 'â': 'a',
+                'è': 'e', 'é': 'e', 'ê': 'e',
+                'ì': 'i', 'í': 'i', 'î': 'i', 
+                'ò': 'o', 'ó': 'o', 'ô': 'o',
+                'ù': 'u', 'ú': 'u', 'û': 'u'
+            }
+            return vowel_map.get(c.lower(), c.lower())
         
-        # Standard Levenshtein algorithm
-        if len(s1_norm) < len(s2_norm):
+        # Standard Levenshtein with Perl-compatible vowel costs
+        if len(s1) < len(s2):
             return self.levenshtein(s2, s1)
             
-        if len(s2_norm) == 0:
-            return len(s1_norm)
+        if len(s2) == 0:
+            return len(s1)
             
-        previous_row = list(range(len(s2_norm) + 1))
-        for i, c1 in enumerate(s1_norm):
+        previous_row = list(range(len(s2) + 1))
+        for i, c1 in enumerate(s1):
             current_row = [i + 1]
-            for j, c2 in enumerate(s2_norm):
+            for j, c2 in enumerate(s2):
                 insertions = previous_row[j + 1] + 1
                 deletions = current_row[j] + 1
-                substitutions = previous_row[j] + (c1 != c2)
+                
+                # Perl-compatible substitution cost
+                if c1.lower() == c2.lower():
+                    # Identical characters
+                    substitution_cost = 0
+                elif is_vowel(c1) and is_vowel(c2):
+                    # Vowel to vowel: cost 0 (Perl behavior)
+                    substitution_cost = 0
+                else:
+                    # All other substitutions: cost 1
+                    substitution_cost = 1
+                
+                substitutions = previous_row[j] + substitution_cost
                 current_row.append(min(insertions, deletions, substitutions))
             previous_row = current_row
             
