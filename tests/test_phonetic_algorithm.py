@@ -13,18 +13,27 @@ class TestFurlanPhoneticAlgorithm:
         return FurlanPhoneticAlgorithm()
 
     def test_core_phonetic_hashes(self, algorithm):
-        """Test core words from COF - these results must match exactly"""
+        """Test comprehensive phonetic algorithm - exact compatibility with COF::DataCompat Perl implementation"""
         
-        # COMPREHENSIVE test cases with CORRECT results from COF Perl implementation
+        # UNIFIED test cases with CORRECT results from COF::DataCompat Perl implementation
+        # These match exactly the test_phonetic_algorithm.pl test suite
         test_cases = [
-            # Core test words with verified Perl results from COF
+            # Existing regression tests from COF
             ("furlan", "fYl65", "fYl65"),
-            ("cjase", "A6A7", "c76E7"), 
+            ("cjase", "A6A7", "c76E7"),
+            ("lenghe", "X7", "X7"),
+            ("scuele", "AA87l7", "Ec87l7"),
+            ("mandrie", "5659r77", "5659r77"),
+            ("barcon", "b2A85", "b2c85"),
+            ("nade", "5697", "5697"),
+            ("nuie", "587", "587"),
+            ("specifiche", "Ap7Af7A7", "Ep7c7f7c7"),
+            
+            # From test_phonetic_perl.pl (consolidated duplications)
             ("çavatis", "A6v6AA", "ç6v697E"),
             ("cjatâ", "A696", "c7696"),
             ("diretamentri", "I7r79O", "Er79O"),
             ("sdrumâ", "A9r856", "E9r856"),
-            ("lenghe", "X7", "X7"),
             ("aghe", "6g7", "6E7"),
             ("çucjar", "A8A2", "ç8c72"),
             ("çai", "A6", "ç6"),
@@ -38,51 +47,107 @@ class TestFurlanPhoneticAlgorithm:
             ("frut", "fr89", "fr89"),
             ("femine", "f75757", "f75757"),
             
-            # Additional verified words
-            ("arbul", "2b8l", "2b8l"),
-            ("blanc", "bl65A", "bl650"),
-            ("cjan", "A65", "c765"),
-            ("duse", "I8A7", "I8E7"),
-            ("erbe", "2b7", "2b7"),
-            ("flôr", "flY", "flY"),
-            ("gjat", "g769", "E69"),
-            ("housî", "8A", "8E7"),
-            ("insom", "75A85", "75E85"),
-            ("jadis", "7697A", "76EE"),
-            ("kwam", "A65", "k65"),
-            ("lenç", "l75A", "l75ç"),
-            ("muse", "58A7", "58E7"),
-            ("nuje", "5877", "5877"),
-            
-            # Single character tests from verified Perl results
+            # Single character tests
             ("a", "6", "6"),
             ("e", "7", "7"),
             ("i", "7", "7"),
             ("o", "8", "8"),
             ("u", "8", "8"),
-            ("c", "A", "0"),
-            ("g", "g", "0"),
-            ("s", "A", "E"),
-            ("t", "H", "H"),
-            ("d", "I", "I"),
             
-            # Additional words from expanded dataset
-            ("scuele", "AA87l7", "Ec87l7"),
-            ("erbis", "2b7A", "2b7E"),
-            ("gnovis", "g58v7A", "E58v7E"),
-            ("fameis", "f657A", "f657E"),
-            ("storiis", "A9Y7A", "E9Y7E"),
-            ("vignêt", "v7g579", "v7E579"),
+            # Feature tests with ç in different positions
+            ("çarve", "A2v7", "ç2v7"),
+            ("braç", "br6A", "br6ç"),
+            ("piçul", "p7A8l", "p7ç8l"),
+            
+            # Words with gj/gi patterns
+            ("gjat", "g769", "E69"),
+            ("bragje", "br6g77", "br6E7"),
+            ("gjaldi", "g76l97", "E6l97"),
+            
+            # Words with cj patterns
+            ("cjalç", "A6lA", "c76lç"),
+            ("ancje", "65A7", "65c77"),
+            ("vecje", "v7A7", "v7c77"),
+            
+            # Consonant sequences
+            ("struc", "A9r8A", "E9r80"),
+            ("spès", "Ap7A", "Ep7E"),
+            ("blanc", "bl65A", "bl650"),
+            ("spirt", "Ap7r9", "Ep7r9"),
+            
+            # Words with h
+            ("ghe", "g7", "E7"),
+            ("ghi", "g7", "E"),
+            ("chê", "A", "c7"),
+            ("schei", "AA7", "Ec7"),
+            
+            # Words with apostrophes
+            ("l'aghe", "l6g7", "l6E7"),
+            ("d'àcue", "I6A87", "I6c87"),
+            ("n'omp", "5853", "5853"),
+            
+            # Accented vowels
+            ("gòs", "g8A", "E8E"),
+            ("pôc", "p8A", "p80"),
+            ("crês", "Ar7A", "cr7E"),
             ("fûc", "f8A", "f80"),
-            ("monts", "585A", "585E"),
-            ("vieli", "v77l7", "v77l7"),
-            ("gnove", "g58v7", "E58v7"),
-            ("cont", "A859", "c859"),
-            ("res", "r7A", "r7E"),
-            ("lûs", "l8A", "l8E"),
-            ("vôs", "v8A", "v8E"),
-            ("timp", "A53", "H753"),
-            ("gent", "g759", "E759"),
+            ("çûç", "A8A", "ç8ç"),
+            
+            # Special combinations
+            ("sdrume", "A9r857", "E9r857"),
+            ("strucâ", "A9r8A6", "E9r8c6"),
+            ("blave", "bl6v7", "bl6v7"),
+            
+            # Double consonants
+            ("mame", "5657", "5657"),
+            ("sasse", "A6A7", "E6E7"),
+            ("puarte", "pY97", "pY97"),
+            
+            # Special endings
+            ("prins", "pr1", "pr1"),
+            ("gjenç", "g775A", "E75ç"),
+            ("mont", "5859", "5859"),
+            ("viert", "v729", "v729"),
+            
+            # Short words
+            ("me", "57", "57"),
+            ("no", "58", "58"),
+            ("sì", "A", "E7"),
+            ("là", "l6", "l6"),
+            
+            # Long words
+            ("diretament", "I7r7965759", "Er7965759"),
+            ("incjamarade", "75A652697", "75c7652697"),
+            ("straçonarie", "A9r6A85277", "E9r6ç85277"),
+            
+            # Additional test cases from legacy Friulian word files
+            # Selected for diverse phonetic patterns and comprehensive coverage
+            ("mote", "5897", "5897"),
+            ("nobèl", "58b7l", "58b7l"),
+            ("nissun", "57A85", "57E85"),
+            ("babèl", "b6b7l", "b6b7l"),
+            ("bertòs", "b298A", "b298E"),
+            ("cjandùs", "A6598A", "c76598E"),
+            ("cnît", "A579", "c579"),
+            ("corfù", "AYf8", "cYf8"),
+            ("epicûr", "7p7AY", "7p7cY"),
+            ("maiôr", "56Y", "56Y"),
+            ("gjalde", "g76l97", "E6l97"),
+            ("gjenar", "g7752", "E752"),
+            ("gjessis", "g77AA", "E7E7E"),
+            ("gjetâ", "g7796", "E796"),
+            ("gjoc", "g78A", "E80"),
+            ("çucule", "A8A8l7", "ç8c8l7"),
+            ("çuple", "A8pl7", "ç8pl7"),
+            ("çurì", "AY7", "çY7"),
+            ("çuse", "A8A7", "ç8E7"),
+            ("çusse", "A8A7", "ç8E7"),
+            ("nîf", "574", "574"),
+            ("nîl", "57l", "57l"),
+            ("nît", "579", "579"),
+            ("mûf", "584", "584"),
+            ("mûr", "5Y", "5Y"),
+            ("mûs", "58A", "58E"),
         ]
         
         for word, expected_first, expected_second in test_cases:
