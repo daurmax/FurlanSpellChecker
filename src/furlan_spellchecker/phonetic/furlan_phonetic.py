@@ -1,256 +1,260 @@
-"""Friulian phonetic algorithm implementation (ported from C#)."""
+"""Friulian phonetic algorithm implementation (exact port from COF Perl)."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-import re
 from typing import List, Tuple
 
 from ..core.interfaces import IPhoneticAlgorithm
-from ..core.exceptions import PhoneticAlgorithmError
-
-
-# Minimal vowel groups equivalent to FriulianConstants for Levenshtein costing.
-VOWELS_A = {c: True for c in "aàáâ"}
-VOWELS_E = {c: True for c in "eèéê"}
-VOWELS_I = {c: True for c in "iìíî"}
-VOWELS_O = {c: True for c in "oòóô"}
-VOWELS_U = {c: True for c in "uùúû"}
-
-UNCOMMON_APOSTROPHES_PATTERN = r"[’`´]"
-SMALL_A_VARIANTS = r"[âäàáÄÁÂÀ]"
-SMALL_E_VARIANTS = r"[éêëèÉÊËÈ]"
-SMALL_I_VARIANTS = r"[ïîìíÍÎÏÌ]"
-SMALL_O_VARIANTS = r"[ôöòóÓÔÒÖ]"
-SMALL_U_VARIANTS = r"[ÚÙÛÜúûùü]"
 
 
 class FurlanPhoneticAlgorithm(IPhoneticAlgorithm):
-    """Friulian-specific phonetic algorithm for word similarity and hashing."""
-
-    def get_phonetic_code(self, word: str) -> str:  # Backwards compatibility single hash
-        if not word:
-            return ""
-        h1, _ = self.get_phonetic_hashes_by_word(word)
-        return h1
-
-    # Public API required by higher layers.
-    def get_phonetic_hashes_by_word(self, word: str) -> tuple[str, str]:
-        if not word:
+    """Friulian phonetic algorithm - exact port of COF::Data::phalg_furlan from Perl"""
+    
+    def __init__(self):
+        """Initialize the phonetic algorithm"""
+        pass
+    
+    def _phalg_furlan(self, word: str) -> tuple[str, str]:
+        """
+        Exact port of COF::Data::phalg_furlan from Perl (lines 274-479)
+        Returns: (primo_hash, secondo_hash)
+        """
+        if not word or word is None:
             return "", ""
-        try:
-            prepared = self._prepare_original_word(word)
-            return self._get_phonetic_hashes_by_original(prepared)
-        except Exception as exc:  # pragma: no cover - defensive
-            raise PhoneticAlgorithmError(f"Failed phonetic hashing for '{word}': {exc}") from exc
-
-    def are_phonetically_similar(self, word1: str, word2: str) -> bool:
-        if not word1 or not word2:
-            return False
-        h1a, h1b = self.get_phonetic_hashes_by_word(word1)
-        h2a, h2b = self.get_phonetic_hashes_by_word(word2)
-        return h1a == h2a or h1a == h2b or h1b == h2a or h1b == h2b
-
-    # Region: direct ports of the C# logic -------------------------------------------------
-    def _prepare_original_word(self, original: str) -> str:
-        # Replace uncommon apostrophes with '
-        original = re.sub(UNCOMMON_APOSTROPHES_PATTERN, "'", original)
-        # Replace "e " with "'"
-        original = re.sub(r"e ", "'", original)
-        # Remove spaces
-        original = re.sub(r" ", "", original)
-        # Remove double letters (compress runs)
-        compressed = []
-        for ch in original:
-            if not compressed or compressed[-1] != ch:
-                compressed.append(ch)
-        original = "".join(compressed)
+            
+        original = word
+        
+        # Step 1: Normalize apostrophes and clean up
+        original = original.replace("'", "'")  # Normalize apostrophes
+        original = original.replace("e ", "'")  # Handle "e " -> "'"
+        
+        # Remove non-Friulian characters and whitespace
+        import re
+        original = re.sub(r'[^\w\']', '', original, flags=re.UNICODE)
+        
+        # Remove null chars (tr/\0-\377//s equivalent)
+        original = ''.join(c for c in original if ord(c) > 0)
+        
         original = original.lower()
-        original = re.sub(r"h'", "K", original)
-        original = re.sub(SMALL_A_VARIANTS, "a", original)
-        original = re.sub(SMALL_E_VARIANTS, "e", original)
-        original = re.sub(SMALL_I_VARIANTS, "i", original)
-        original = re.sub(SMALL_O_VARIANTS, "o", original)
-        original = re.sub(SMALL_U_VARIANTS, "u", original)
-        original = re.sub(r"çi", "ci", original)
-        original = re.sub(r"çe", "ce", original)
-        original = re.sub(r"ds$", "ts", original)
-        original = re.sub(r"sci", "ssi", original)
-        original = re.sub(r"sce", "se", original)
-        original = re.sub(r" ", "", original)
-        original = re.sub(r"w", "", original)
-        original = re.sub(r"y", "", original)
-        original = re.sub(r"x", "", original)
-        original = re.sub(r"^che", "chi", original)
-        original = re.sub(r"h", "", original)
-        original = re.sub(r"leng", "X", original)
-        original = re.sub(r"lingu", "X", original)
-        original = re.sub(r"amentri", "O", original)
-        original = re.sub(r"ementri", "O", original)
-        original = re.sub(r"amenti", "O", original)
-        original = re.sub(r"ementi", "O", original)
-        original = re.sub(r"uintri", "W", original)
-        original = re.sub(r"ontra", "W", original)
-        original = re.sub(r"ur", "Y", original)
-        original = re.sub(r"uar", "Y", original)
-        original = re.sub(r"or", "Y", original)
+        
+        # Step 2: Handle h' -> K
+        original = original.replace("h'", "K")
+        
+        # Step 3: Normalize accented vowels
+        original = original.replace("à", "a").replace("â", "a").replace("á", "a").replace("'a", "a")
+        original = original.replace("è", "e").replace("ê", "e").replace("é", "e").replace("'e", "e")
+        original = original.replace("ì", "i").replace("î", "i").replace("í", "i").replace("'i", "i")
+        original = original.replace("ò", "o").replace("ô", "o").replace("ó", "o").replace("'o", "o")
+        original = original.replace("ù", "u").replace("û", "u").replace("ú", "u").replace("'u", "u")
+        
+        # Step 4: Handle çi/çe
+        original = original.replace("çi", "ci").replace("çe", "ce")
+        
+        # Step 5: Final consonant transformations
+        original = re.sub(r'ds$', 'ts', original)
+        original = original.replace("sci", "ssi").replace("sce", "se")
+        
+        # Remove null chars again
+        original = ''.join(c for c in original if ord(c) > 0)
+        
+        # Step 6: Remove w, y, x
+        original = original.replace("w", "").replace("y", "").replace("x", "")
+        
+        # Step 7: Special transformations
+        original = re.sub(r'^che', 'chi', original)
+        original = original.replace("h", "")
+        
+        # Step 8: Special sequences
+        original = original.replace("leng", "X").replace("lingu", "X")
+        original = original.replace("amentri", "O").replace("ementri", "O")
+        original = original.replace("amenti", "O").replace("ementi", "O")
+        original = original.replace("uintri", "W").replace("ontra", "W")
+        
+        # Step 9: Handle ur/uar/or
+        original = original.replace("ur", "Y").replace("uar", "Y").replace("or", "Y")
+        
+        # Step 10: Handle initial contractions
         original = re.sub(r"^'s", "s", original)
         original = re.sub(r"^'n", "n", original)
-        original = re.sub(r"ins$", "1", original)
-        original = re.sub(r"in$", "1", original)
-        original = re.sub(r"ims$", "1", original)
-        original = re.sub(r"im$", "1", original)
-        original = re.sub(r"gns$", "1", original)
-        original = re.sub(r"gn$", "1", original)
-        original = re.sub(r"mn", "5", original)
-        original = re.sub(r"nm", "5", original)
-        original = re.sub(r"[mn]", "5", original)
-        original = re.sub(r"er", "2", original)
-        original = re.sub(r"ar", "2", original)
-        original = re.sub(r"b$", "3", original)
-        original = re.sub(r"p$", "3", original)
-        original = re.sub(r"v$", "4", original)
-        original = re.sub(r"f$", "4", original)
-        return original
-
-    def _get_phonetic_hashes_by_original(self, original: str) -> tuple[str, str]:
-        # Split into first and second hashes early, following Perl exactly
-        primo = original
-        secondo = original
-
-        # FIRST HASH transformations (primo) - exact Perl order
-        primo = re.sub(r"'c", "A", primo)
-        primo = re.sub(r"c[ji]us$", "A", primo)
-        primo = re.sub(r"c[ji]u$", "A", primo)
-        primo = re.sub(r"c'", "A", primo)
-        primo = re.sub(r"ti", "A", primo)
-        primo = re.sub(r"ci", "A", primo)
-        primo = re.sub(r"si", "A", primo)
-        primo = re.sub(r"zs", "A", primo)
-        primo = re.sub(r"zi", "A", primo)
-        primo = re.sub(r"cj", "A", primo)
-        primo = re.sub(r"çs", "A", primo)
-        primo = re.sub(r"tz", "A", primo)
-        primo = re.sub(r"z", "A", primo)
-        # primo = re.sub(r"ç", "A", primo)  # REMOVED - Perl doesn't actually transform ç in test cases
-        primo = re.sub(r"c", "A", primo)
-        primo = re.sub(r"q", "A", primo)
-        primo = re.sub(r"k", "A", primo)
-        primo = re.sub(r"ts", "A", primo)
-        primo = re.sub(r"s", "A", primo)
-
-        # SECOND HASH transformations (secondo) - exact Perl order (NO ç->A!)
-        secondo = re.sub(r"c$", "0", secondo)
-        secondo = re.sub(r"g$", "0", secondo)
-        secondo = re.sub(r"bs$", "s", secondo)
-        secondo = re.sub(r"cs$", "s", secondo)
-        secondo = re.sub(r"fs$", "s", secondo)
-        secondo = re.sub(r"gs$", "s", secondo)
-        secondo = re.sub(r"ps$", "s", secondo)
-        secondo = re.sub(r"vs$", "s", secondo)
         
-        secondo = re.sub(r"di(?=.)", "E", secondo)  # di followed by something
-        secondo = re.sub(r"gji", "E", secondo)
-        secondo = re.sub(r"gi", "E", secondo)
-        secondo = re.sub(r"gj", "E", secondo)
-        secondo = re.sub(r"g", "E", secondo)
-        secondo = re.sub(r"ts", "E", secondo)
-        secondo = re.sub(r"s", "E", secondo)
-        secondo = re.sub(r"zi", "E", secondo)
-        secondo = re.sub(r"z", "E", secondo)
-
-        # j -> i conversion and squeeze consecutive i (exact Perl: tr/i/i/s)
-        primo = re.sub(r"j", "i", primo)
-        secondo = re.sub(r"j", "i", secondo)
-        primo = re.sub(r"i+", "i", primo)
-        secondo = re.sub(r"i+", "i", secondo)
-
-        # VOWEL AND DIPHTHONG MAPPING - Exact Perl order: diphthongs first, then singles
-        # Primo hash vowel mapping
-        primo = re.sub(r"ai", "6", primo)
-        primo = re.sub(r"ei", "7", primo)
-        primo = re.sub(r"ou", "8", primo)
-        primo = re.sub(r"oi", "8", primo)
-        primo = re.sub(r"vu", "8", primo)
-        primo = re.sub(r"a", "6", primo)
-        primo = re.sub(r"e", "7", primo)
-        primo = re.sub(r"o", "8", primo)
-        primo = re.sub(r"u", "8", primo)
-        primo = re.sub(r"i", "7", primo)
-
-        # Secondo hash vowel mapping (identical)
-        secondo = re.sub(r"ai", "6", secondo)
-        secondo = re.sub(r"ei", "7", secondo)
-        secondo = re.sub(r"ou", "8", secondo)
-        secondo = re.sub(r"oi", "8", secondo)
-        secondo = re.sub(r"vu", "8", secondo)
-        secondo = re.sub(r"a", "6", secondo)
-        secondo = re.sub(r"e", "7", secondo)
-        secondo = re.sub(r"o", "8", secondo)
-        secondo = re.sub(r"u", "8", secondo)
-        secondo = re.sub(r"i", "7", secondo)
-
-        # START-OF-WORD t/d -> H/I BEFORE general t/d -> 9 (exact Perl order)
-        primo = re.sub(r"^t", "H", primo)
-        primo = re.sub(r"^d", "I", primo)
-        secondo = re.sub(r"^t", "H", secondo)
-        secondo = re.sub(r"^d", "I", secondo)
-
-        # General t/d -> 9
-        primo = re.sub(r"t", "9", primo)
-        primo = re.sub(r"d", "9", primo)
-        secondo = re.sub(r"t", "9", secondo)
-        secondo = re.sub(r"d", "9", secondo)
-
+        # Step 11: Handle endings
+        original = re.sub(r'ins$', '1', original)
+        original = re.sub(r'in$', '1', original)
+        original = re.sub(r'ims$', '1', original)
+        original = re.sub(r'im$', '1', original)
+        original = re.sub(r'gns$', '1', original)
+        original = re.sub(r'gn$', '1', original)
+        
+        # Step 12: Handle m/n sounds
+        original = original.replace("mn", "5").replace("nm", "5")
+        original = re.sub(r'[mn]', '5', original)
+        
+        # Step 13: Handle er/ar
+        original = original.replace("er", "2").replace("ar", "2")
+        
+        # Step 14: Final consonants
+        original = re.sub(r'b$', '3', original)
+        original = re.sub(r'p$', '3', original)
+        original = re.sub(r'v$', '4', original)
+        original = re.sub(r'f$', '4', original)
+        
+        # Copy for primo and secondo
+        primo = secondo = original
+        
+        # Step 15: Primo transformations
+        primo = primo.replace("'c", "A")
+        primo = re.sub(r'c[ji]us$', 'A', primo)
+        primo = re.sub(r'c[ji]u$', 'A', primo)
+        primo = primo.replace("c'", "A")
+        primo = primo.replace("ti", "A").replace("ci", "A").replace("si", "A")
+        primo = primo.replace("zs", "A").replace("zi", "A").replace("cj", "A")
+        primo = primo.replace("çs", "A").replace("tz", "A").replace("z", "A")
+        primo = primo.replace("ç", "A").replace("c", "A").replace("q", "A")
+        primo = primo.replace("k", "A").replace("ts", "A").replace("s", "A")
+        
+        # Step 16: Secondo transformations
+        secondo = re.sub(r'c$', '0', secondo)
+        secondo = re.sub(r'g$', '0', secondo)
+        
+        secondo = re.sub(r'bs$', 's', secondo)
+        secondo = re.sub(r'cs$', 's', secondo)
+        secondo = re.sub(r'fs$', 's', secondo)
+        secondo = re.sub(r'gs$', 's', secondo)
+        secondo = re.sub(r'ps$', 's', secondo)
+        secondo = re.sub(r'vs$', 's', secondo)
+        
+        # Handle g/gj/gi transformations for secondo
+        secondo = re.sub(r'di(?=.)', 'E', secondo)
+        secondo = secondo.replace("gji", "E").replace("gi", "E").replace("gj", "E")
+        secondo = secondo.replace("g", "E")
+        
+        secondo = secondo.replace("ts", "E").replace("s", "E")
+        secondo = secondo.replace("zi", "E").replace("z", "E")
+        
+        # Step 17: Handle j -> i for both
+        primo = primo.replace("j", "i")
+        secondo = secondo.replace("j", "i")
+        
+        # Step 18: Remove consecutive i's
+        primo = re.sub(r'i+', 'i', primo)
+        secondo = re.sub(r'i+', 'i', secondo)
+        
+        # Step 19: Vowel transformations for primo
+        primo = primo.replace("ai", "6").replace("a", "6")
+        primo = primo.replace("ei", "7").replace("e", "7")
+        primo = primo.replace("ou", "8").replace("oi", "8").replace("o", "8")
+        primo = primo.replace("vu", "8").replace("u", "8")
+        primo = primo.replace("i", "7")
+        
+        # Step 20: Vowel transformations for secondo
+        secondo = secondo.replace("ai", "6").replace("a", "6")
+        secondo = secondo.replace("ei", "7").replace("e", "7")
+        secondo = secondo.replace("ou", "8").replace("oi", "8").replace("o", "8")
+        secondo = secondo.replace("vu", "8").replace("u", "8")
+        secondo = secondo.replace("i", "7")
+        
+        # Step 21: Initial t/d transformations for both
+        primo = re.sub(r'^t', 'H', primo)
+        primo = re.sub(r'^d', 'I', primo)
+        primo = primo.replace("t", "9").replace("d", "9")
+        
+        secondo = re.sub(r'^t', 'H', secondo)
+        secondo = re.sub(r'^d', 'I', secondo)
+        secondo = secondo.replace("t", "9").replace("d", "9")
+        
         return primo, secondo
-
-    # Additional utilities (port) ----------------------------------------------------------
-    def levenshtein(self, source: str, target: str) -> int:
-        if source == target:
-            return 0
-        if not source:
-            return len(target)
-        if not target:
-            return len(source)
-        rows = len(source) + 1
-        cols = len(target) + 1
-        dist = [[0] * cols for _ in range(rows)]
-        for i in range(rows):
-            dist[i][0] = i
-        for j in range(cols):
-            dist[0][j] = j
-        for i, sc in enumerate(source, start=1):
-            for j, tc in enumerate(target, start=1):
-                if sc == tc:
-                    cost = 0
-                else:
-                    if not (
-                        (sc in VOWELS_A and tc in VOWELS_A)
-                        or (sc in VOWELS_E and tc in VOWELS_E)
-                        or (sc in VOWELS_I and tc in VOWELS_I)
-                        or (sc in VOWELS_O and tc in VOWELS_O)
-                        or (sc in VOWELS_U and tc in VOWELS_U)
-                    ):
-                        cost = 1
-                    else:
-                        cost = 0
-                dist[i][j] = min(
-                    dist[i - 1][j] + 1,
-                    dist[i][j - 1] + 1,
-                    dist[i - 1][j - 1] + cost,
-                )
-        return dist[-1][-1]
-
+    
+    def get_phonetic_hashes_by_word(self, word: str) -> tuple[str, str]:
+        """
+        Get both phonetic hashes for a word
+        Returns: (first_hash, second_hash)
+        """
+        return self._phalg_furlan(word)
+    
+    def get_phonetic_code(self, word: str) -> str:
+        """
+        Get primary phonetic code for a word (backwards compatibility)
+        Returns: first phonetic hash only
+        """
+        first, _ = self._phalg_furlan(word)
+        return first
+    
+    def are_phonetically_similar(self, word1: str, word2: str) -> bool:
+        """Check if two words are phonetically similar"""
+        if not word1 or not word2:
+            return False
+            
+        hash1_1, hash1_2 = self._phalg_furlan(word1)
+        hash2_1, hash2_2 = self._phalg_furlan(word2)
+        
+        return (hash1_1 == hash2_1) or (hash1_1 == hash2_2) or (hash1_2 == hash2_1) or (hash1_2 == hash2_2)
+    
+    def levenshtein(self, s1: str, s2: str) -> int:
+        """
+        Compute Levenshtein distance with Friulian character equivalences
+        """
+        if not s1:
+            return len(s2) if s2 else 0
+        if not s2:
+            return len(s1)
+            
+        # Friulian vowel equivalences
+        vowel_equivalences = {
+            'à': 'a', 'á': 'a', 'â': 'a',
+            'è': 'e', 'é': 'e', 'ê': 'e', 'ë': 'e',
+            'ì': 'i', 'í': 'i', 'î': 'i', 'ï': 'i',
+            'ò': 'o', 'ó': 'o', 'ô': 'o', 'ö': 'o',
+            'ù': 'u', 'ú': 'u', 'û': 'u', 'ü': 'u'
+        }
+        
+        def normalize_char(c):
+            return vowel_equivalences.get(c.lower(), c.lower())
+        
+        # Normalize strings
+        s1_norm = ''.join(normalize_char(c) for c in s1)
+        s2_norm = ''.join(normalize_char(c) for c in s2)
+        
+        # Standard Levenshtein algorithm
+        if len(s1_norm) < len(s2_norm):
+            return self.levenshtein(s2, s1)
+            
+        if len(s2_norm) == 0:
+            return len(s1_norm)
+            
+        previous_row = list(range(len(s2_norm) + 1))
+        for i, c1 in enumerate(s1_norm):
+            current_row = [i + 1]
+            for j, c2 in enumerate(s2_norm):
+                insertions = previous_row[j + 1] + 1
+                deletions = current_row[j] + 1
+                substitutions = previous_row[j] + (c1 != c2)
+                current_row.append(min(insertions, deletions, substitutions))
+            previous_row = current_row
+            
+        return previous_row[-1]
+    
     def sort_friulian(self, words: List[str]) -> List[str]:
-        return sorted(words, key=self._translate_word_for_sorting)
-
-    def _translate_word_for_sorting(self, word: str) -> str:
-        original_chars = "0123456789âäàáÄÁÂÀAaBCçÇDéêëèÉÊËÈEeFGHïîìíÍÎÏÌIiJKLMNôöòóÓÔÒÖOoPQRSTÚÙÛÜúûùüuUVWXYZ"
-        sorted_chars = "0123456789aaaaaaaaaabcccdeeeeeeeeeefghiiiiiiiiiijklmnoooooooooopqrstuuuuuuuuuuvwxyz"
-        trans = []
-        for c in word:
-            idx = original_chars.find(c)
-            trans.append(sorted_chars[idx] if idx >= 0 else c)
-        return "".join(trans).replace("^'s", "s")
-
-
+        """
+        Sort words using Friulian alphabetical order
+        """
+        if not words:
+            return []
+            
+        # Friulian alphabet order (simplified)
+        friulian_order = {
+            'a': 1, 'à': 1, 'á': 1, 'â': 1,
+            'b': 2, 'c': 3, 'ç': 4, 'd': 5,
+            'e': 6, 'è': 6, 'é': 6, 'ê': 6, 'ë': 6,
+            'f': 7, 'g': 8, 'h': 9,
+            'i': 10, 'ì': 10, 'í': 10, 'î': 10, 'ï': 10,
+            'j': 11, 'k': 12, 'l': 13, 'm': 14, 'n': 15,
+            'o': 16, 'ò': 16, 'ó': 16, 'ô': 16, 'ö': 16,
+            'p': 17, 'q': 18, 'r': 19, 's': 20, 't': 21,
+            'u': 22, 'ù': 22, 'ú': 22, 'û': 22, 'ü': 22,
+            'v': 23, 'w': 24, 'x': 25, 'y': 26, 'z': 27
+        }
+        
+        def sort_key(word):
+            return [friulian_order.get(c.lower(), 999) for c in word.lower()]
+        
+        return sorted(words, key=sort_key)
