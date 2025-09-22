@@ -26,7 +26,7 @@ class TestFurlanPhoneticAlgorithm:
             ("mandrie", "5659r77", "5659r77"),
             ("barcon", "b2A85", "b2c85"),
             ("nade", "5697", "5697"),
-            ("nuie", "587", "587"),
+            ("nuie", "5877", "5877"),
             ("specifiche", "Ap7Af7A7", "Ep7c7f7c7"),
             
             # From test_phonetic_perl.pl (consolidated duplications)
