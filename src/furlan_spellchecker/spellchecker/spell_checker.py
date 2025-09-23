@@ -7,6 +7,7 @@ from ..core.interfaces import ISpellChecker, IDictionary, ITextProcessor
 from ..entities.processed_element import IProcessedElement, ProcessedWord
 from ..database import DatabaseManager, DictionaryType
 from ..phonetic.furlan_phonetic import FurlanPhoneticAlgorithm
+from .suggestion_engine import SuggestionEngine
 from ..config.schemas import FurlanSpellCheckerConfig
 
 
@@ -26,6 +27,12 @@ class FurlanSpellChecker(ISpellChecker):
         self._config = config or FurlanSpellCheckerConfig()
         self._db_manager = DatabaseManager(self._config)
         self._phonetic_algo = FurlanPhoneticAlgorithm()
+        # Central suggestion engine encapsulates ranking, phonetic clusters, error corrections
+        self._suggestion_engine = SuggestionEngine(
+            db_manager=self._db_manager,
+            phonetic=self._phonetic_algo,
+            max_suggestions=(config.dictionary.max_suggestions if config else 10),
+        )
 
     @property
     def processed_elements(self) -> list[IProcessedElement]:
@@ -106,54 +113,11 @@ class FurlanSpellChecker(ISpellChecker):
         return False
 
     async def get_word_suggestions(self, word: ProcessedWord) -> list[str]:
-        """Get suggestions for the given word."""
+        """Get suggestions for the given word using the central SuggestionEngine."""
         if word.correct:
             return []
-        
-        suggestions = []
-        word_str = word.current
-        
-        # Check for direct corrections in error databases
-        system_correction = self._db_manager.sqlite_db.find_in_system_errors_database(word_str)
-        if system_correction:
-            suggestions.append(system_correction)
-        
-        user_correction = self._db_manager.sqlite_db.find_in_user_errors_database(word_str)
-        if user_correction:
-            suggestions.append(user_correction)
-        
-        # Try variations (case changes) for error database lookup
-        variations = [
-            word_str.lower(),
-            word_str.capitalize(),
-            word_str.upper()
-        ]
-        
-        for variation in variations:
-            if variation != word_str:
-                system_var_correction = self._db_manager.sqlite_db.find_in_system_errors_database(variation)
-                if system_var_correction and system_var_correction not in suggestions:
-                    suggestions.append(system_var_correction)
-        
-        # Get radix tree suggestions
-        try:
-            radix_suggestions = self._db_manager.radix_tree.get_suggestions(
-                word_str, 
-                max_suggestions=self._config.dictionary.max_suggestions
-            )
-            for suggestion in radix_suggestions:
-                if suggestion not in suggestions:
-                    suggestions.append(suggestion)
-        except FileNotFoundError:
-            # Radix tree not available
-            pass
-        
-        # Fallback to dictionary suggestions if available
-        if not suggestions:
-            suggestions = self._dictionary.get_suggestions(word_str)
-        
-        # Limit suggestions based on config
-        return suggestions[:self._config.dictionary.max_suggestions]
+        # Delegate to suggestion engine (synchronous); keep async signature for interface parity
+        return self._suggestion_engine.suggest(word.current)
 
     def swap_word_with_suggested(self, original_word: ProcessedWord, suggested_word: str) -> None:
         """Replace the original word with the suggested one."""

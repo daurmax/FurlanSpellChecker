@@ -177,3 +177,6 @@ temp/
 tmp/
 .temp/
 test_output/
+
+# Extracted database files (generated from zips in data/databases/)
+data/databases_extracted/
