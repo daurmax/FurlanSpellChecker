@@ -7,7 +7,7 @@ import sqlite3
 
 def get_database_paths():
     """Get paths to extracted database files."""
-    base_dir = Path(__file__).parent.parent / "data" / "databases"
+    base_dir = Path(__file__).parent.parent / "data" / "databases_extracted"
     return {
         "words": base_dir / "words.db",
         "frequencies": base_dir / "frequencies.sqlite", 
@@ -19,7 +19,8 @@ def get_database_paths():
 
 def ensure_databases_extracted():
     """Ensure all database ZIP files are extracted."""
-    base_dir = Path(__file__).parent.parent / "data" / "databases"
+    zip_dir = Path(__file__).parent.parent / "data" / "databases"
+    extract_dir = Path(__file__).parent.parent / "data" / "databases_extracted"
     
     # Extract ZIP files if database files don't exist
     zip_files = {
@@ -30,16 +31,19 @@ def ensure_databases_extracted():
         "words_radix_tree.zip": "words.rt",
     }
     
+    # Create extraction directory if it doesn't exist
+    extract_dir.mkdir(parents=True, exist_ok=True)
+    
     for zip_name, db_file in zip_files.items():
-        zip_path = base_dir / zip_name
-        db_path = base_dir / db_file
+        zip_path = zip_dir / zip_name
+        db_path = extract_dir / db_file
         
         if zip_path.exists() and not db_path.exists():
-            print(f"Extracting {zip_name}...")
+            print(f"Extracting {zip_name} to {extract_dir}...")
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                zip_ref.extractall(base_dir)
+                zip_ref.extractall(extract_dir)
     
-    return base_dir
+    return extract_dir
 
 
 def verify_database_files():

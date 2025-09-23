@@ -70,7 +70,12 @@ class FurlanSpellChecker(ISpellChecker):
         system_result_a = self._db_manager.sqlite_db.find_in_system_database(hash_a)
         system_result_b = self._db_manager.sqlite_db.find_in_system_database(hash_b) if hash_a != hash_b else None
         
-        if system_result_a is not None or system_result_b is not None:
+        # Check if the exact word is in the phonetic cluster results
+        if system_result_a and word_str.lower() in system_result_a.split(","):
+            word.checked = True
+            word.correct = True
+            return True
+        if system_result_b and word_str.lower() in system_result_b.split(","):
             word.checked = True
             word.correct = True
             return True

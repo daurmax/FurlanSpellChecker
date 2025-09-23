@@ -72,7 +72,8 @@ class SpellCheckPipeline:
     async def get_suggestions(self, word: str, max_suggestions: int = 10) -> list[str]:
         """Get spelling suggestions for a word."""
         processed_word = ProcessedWord(word)
-        return await self._spell_checker.get_word_suggestions(processed_word)
+        suggestions = await self._spell_checker.get_word_suggestions(processed_word)
+        return suggestions[:max_suggestions]
 
     def add_word_to_dictionary(self, word: str) -> bool:
         """Add a word to the dictionary."""
