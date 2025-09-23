@@ -118,6 +118,9 @@ class SuggestionEngine:
         # 5. Hyphen handling
         self._expand_hyphen_variants(word, candidates)
 
+        # 6. RadixTree edit-distance-1 suggestions (COF compatibility)
+        self._add_radix_edit_distance_candidates(lower_word, candidates)
+
         # 6. Ranking & ordering
         ranked = self._rank_candidates(lower_word, case_class, candidates)
         return ranked[: self.max_suggestions]
@@ -130,8 +133,59 @@ class SuggestionEngine:
     def _add_user_error_corrections(self, *args, **kwargs):  # pragma: no cover
         raise NotImplementedError("User error corrections not implemented yet")
 
-    def _add_radix_candidates(self, *args, **kwargs):  # pragma: no cover
-        raise NotImplementedError("Radix tree suggestions not implemented yet")
+    def _add_radix_edit_distance_candidates(self, lower_word: str, candidates: Dict[str, Candidate]):
+        """Add edit-distance-1 suggestions similar to COF's get_rt_sugg method.
+        
+        This generates candidates by applying all possible single-character edits:
+        - Insertions: add a character at any position
+        - Deletions: remove a character at any position  
+        - Substitutions: replace a character at any position
+        - Transpositions: swap adjacent characters
+        
+        Each candidate is checked against the word database for validity.
+        """
+        if not lower_word:
+            return
+            
+        edit_candidates = set()
+        
+        # Generate all possible single-character edits
+        alphabet = 'abcdefghijklmnopqrstuvwxyzâêîôû'  # Friulian alphabet
+        
+        # 1. Deletions: remove each character
+        for i in range(len(lower_word)):
+            candidate = lower_word[:i] + lower_word[i+1:]
+            if candidate:
+                edit_candidates.add(candidate)
+        
+        # 2. Insertions: insert each letter at each position
+        for i in range(len(lower_word) + 1):
+            for char in alphabet:
+                candidate = lower_word[:i] + char + lower_word[i:]
+                edit_candidates.add(candidate)
+        
+        # 3. Substitutions: replace each character with each letter
+        for i in range(len(lower_word)):
+            for char in alphabet:
+                if char != lower_word[i]:
+                    candidate = lower_word[:i] + char + lower_word[i+1:]
+                    edit_candidates.add(candidate)
+        
+        # 4. Transpositions: swap adjacent characters
+        for i in range(len(lower_word) - 1):
+            candidate = lower_word[:i] + lower_word[i+1] + lower_word[i] + lower_word[i+2:]
+            edit_candidates.add(candidate)
+        
+        # Check each candidate against the database and add valid ones
+        for candidate in edit_candidates:
+            if self._is_valid_word(candidate) and candidate not in candidates:
+                # COF uses base_weight=3 for RadixTree suggestions
+                candidates[candidate] = Candidate(
+                    word=candidate,
+                    base_weight=3,  # COF RadixTree priority level
+                    distance=1,     # Edit distance is always 1
+                    original_freq=self._get_frequency(candidate),
+                )
 
     # -------- Core Steps --------
     def _get_phonetic_candidates(self, lower_word: str) -> Set[str]:
@@ -365,12 +419,16 @@ class SuggestionEngine:
                 w2 = 's' + w2[2:]
             return w2
 
+        # COF-compatible sorting: 
+        # - base_weight (error corrections) has absolute priority
+        # - when base_weight is equal, distance has priority over frequency
+        # - exact matches (distance=0) should come first regardless of frequency
         adjusted.sort(
             key=lambda kv: (
-                -kv[1].base_weight,
-                -kv[1].original_freq,
-                kv[1].distance,
-                friulian_key(kv[0]),
+                -kv[1].base_weight,     # Error corrections first
+                kv[1].distance,         # Then by edit distance (0 = exact match)
+                -kv[1].original_freq,   # Then by frequency (higher first)
+                friulian_key(kv[0]),    # Finally friulian alphabetical sort
             )
         )
         # Apply case after ordering
@@ -386,3 +444,32 @@ class SuggestionEngine:
     # -------- Levenshtein (reuse phonetic component) --------
     def _levenshtein(self, a: str, b: str) -> int:
         return self.phonetic.levenshtein(a, b)
+
+    # -------- Word validation --------
+    def _is_valid_word(self, word: str) -> bool:
+        """Check if a word exists in any of the databases."""
+        if not word:
+            return False
+        
+        # Check in system database via phonetic hash (fastest check)
+        try:
+            h1, h2 = self.phonetic.get_phonetic_hashes_by_word(word)
+            sys_words = self.db.sqlite_db.find_in_system_database(h1)
+            if sys_words and word in sys_words.split(","):
+                return True
+            if h2 != h1:
+                sys_words = self.db.sqlite_db.find_in_system_database(h2)
+                if sys_words and word in sys_words.split(","):
+                    return True
+        except Exception:
+            pass
+        
+        # Check in frequency database
+        try:
+            freq = self.db.sqlite_db.find_word_frequency(word)
+            if freq is not None and freq > 0:
+                return True
+        except Exception:
+            pass
+        
+        return False
