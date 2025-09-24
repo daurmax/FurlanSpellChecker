@@ -730,7 +730,8 @@ class SuggestionEngine:
         """
         Rank suggestions exactly like COF's suggest method.
         
-        COF ranking: first by frequency (desc), then by distance (asc), then friulian sort.
+        COF ranking: distance=0 matches first (phonetic equivalence), then by frequency desc, 
+        then by distance asc, then friulian sort.
         """
         if not suggestions:
             return []
@@ -741,25 +742,26 @@ class SuggestionEngine:
         # Sort using COF's friulian sort (basic for now)
         words_list = self._friulian_sort(words_list)
         
-        # Build COF's peso structure: {frequency: {distance: [indices]}}
+        # Build COF's peso structure: {distance: {frequency: [indices]}}
+        # COF prioritizes distance=0 matches (phonetic equivalence) above all else
         peso = {}
         
         for idx, word in enumerate(words_list):
             frequency, distance = suggestions[word]
             
-            if frequency not in peso:
-                peso[frequency] = {}
-            if distance not in peso[frequency]:
-                peso[frequency][distance] = []
+            if distance not in peso:
+                peso[distance] = {}
+            if frequency not in peso[distance]:
+                peso[distance][frequency] = []
                 
-            peso[frequency][distance].append(idx)
+            peso[distance][frequency].append(idx)
         
-        # Sort exactly like COF: frequency desc, distance asc
+        # Sort exactly like COF: distance asc (phonetic matches first), then frequency desc
         ranked_words = []
         
-        for freq in sorted(peso.keys(), reverse=True):  # frequency descending
-            for dist in sorted(peso[freq].keys()):     # distance ascending
-                for idx in peso[freq][dist]:
+        for dist in sorted(peso.keys()):              # distance ascending (0 first)
+            for freq in sorted(peso[dist].keys(), reverse=True):  # frequency descending
+                for idx in peso[dist][freq]:
                     ranked_words.append(words_list[idx])
         
         return ranked_words[:self.max_suggestions]
