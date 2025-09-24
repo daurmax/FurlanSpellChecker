@@ -73,65 +73,203 @@ class SuggestionEngine:
 
     # -------- Public API --------
     def suggest(self, word: str) -> List[str]:
+        """
+        Generate spelling suggestions following COF's exact algorithm.
+        
+        COF Priority Order (from SpellChecker.pm _basic_suggestions):
+        5. Phonetic suggestions (system dict) + frequency
+        4. Phonetic suggestions (user dict) + frequency  
+        3. RadixTree suggestions + frequency
+        2. System error corrections (no frequency)
+        1. User error corrections (no frequency)
+        
+        Special handling for apostrophes (d', un', l') and hyphens.
+        """
         if not word:
             return []
 
         case_class = self._classify_case(word)
         lower_word = word.lower()
+        
+        # Build suggestions dictionary following COF logic
+        suggestions = self._cof_basic_suggestions(word, lower_word, case_class)
+        
+        # Handle special cases like COF's _build_suggestions
+        suggestions = self._cof_handle_apostrophes(word, lower_word, case_class, suggestions)
+        suggestions = self._cof_handle_hyphens(word, suggestions)
+        
+        # Rank and return like COF's suggest method
+        return self._cof_rank_suggestions(suggestions, case_class)
 
-        # 1. Phonetic cluster (system only for now)
-        phonetic_candidates = self._get_phonetic_candidates(lower_word)
-
-        # 2. System error direct corrections
-        error_corrections = self._get_error_corrections(word)
-
-        # 3. Build candidate objects
-        candidates: Dict[str, Candidate] = {}
-
-        # Add error corrections (highest among implemented tiers except SAME)
-        for corr in error_corrections:
-            norm = corr.lower()
-            distance = self._levenshtein(lower_word, norm)
-            candidates[norm] = Candidate(
-                word=corr,
-                base_weight=F_ERRS if norm != lower_word else F_SAME,
-                distance=distance,
-                original_freq=self._get_frequency(corr),
-            )
-
-        # Add phonetic cluster words
-        for w in phonetic_candidates:
-            norm = w.lower()
-            if norm not in candidates:
-                base = F_SAME if norm == lower_word else 0
-                distance = self._levenshtein(lower_word, norm)
-                candidates[norm] = Candidate(
-                    word=w,
-                    base_weight=base,
-                    distance=distance,
-                    original_freq=self._get_frequency(w),
-                )
-
-        # 4. Apostrophe / elision handling expansions
-        self._expand_apostrophe_variants(word, case_class, candidates)
-
-        # 5. Hyphen handling
-        self._expand_hyphen_variants(word, candidates)
-
-        # 6. RadixTree edit-distance-1 suggestions (COF compatibility)
-        self._add_radix_edit_distance_candidates(lower_word, candidates)
-
-        # 6. Ranking & ordering
-        ranked = self._rank_candidates(lower_word, case_class, candidates)
-        return ranked[: self.max_suggestions]
-
-    # -------- Placeholders for future integration --------
-    def _add_user_dictionary_candidates(self, *args, **kwargs):  # pragma: no cover
-        # To be implemented: integrate user dictionary clusters
-        raise NotImplementedError("User dictionary integration not implemented yet")
-
-    def _add_user_error_corrections(self, *args, **kwargs):  # pragma: no cover
-        raise NotImplementedError("User error corrections not implemented yet")
+    # -------- COF Algorithm Implementation --------
+    def _cof_basic_suggestions(self, word: str, lower_word: str, case_class: CaseClass) -> Dict[str, List]:
+        """
+        Implement COF's _basic_suggestions method exactly.
+        
+        Returns dictionary: {suggestion_word: [frequency_or_weight, distance]}
+        """
+        suggestions = {}
+        temp_candidates = {}  # COF's %sugg hash
+        
+        # Get phonetic codes
+        code_a, code_b = self.phonetic.get_phonetic_hashes_by_word(lower_word)
+        
+        # 1. Phonetic suggestions (system dict) - priority 5
+        phonetic_sys = self._get_phonetic_candidates(lower_word)
+        for word_candidate in phonetic_sys:
+            temp_candidates[word_candidate] = 5
+            
+        # 2. Phonetic suggestions (user dict) - priority 4 (placeholder for future)
+        # if self.db has user dict: temp_candidates[word_candidate] = 4
+        
+        # 3. RadixTree suggestions - priority 3  
+        try:
+            radix_suggestions = self.db.radix_tree.get_suggestions(lower_word, max_suggestions=50)
+            for word_candidate in radix_suggestions:
+                if word_candidate and word_candidate not in temp_candidates:
+                    temp_candidates[word_candidate] = 3
+        except Exception:
+            pass
+            
+        # 4. System error corrections - priority 2
+        try:
+            error_correction = self.db.error_db.get_error_correction(word)
+            if error_correction:
+                temp_candidates[error_correction] = 2
+        except (FileNotFoundError, AttributeError):
+            # Fallback to old method
+            error_corrections = self._get_error_corrections(word)
+            for correction in error_corrections:
+                temp_candidates[correction] = 2
+        
+        # 5. User error corrections - priority 1 (placeholder for future)
+        # if self.db has user exceptions: temp_candidates[correction] = 1
+        
+        # Convert to COF's final format: {word: [frequency_or_weight, distance]}
+        for candidate, priority in temp_candidates.items():
+            fixed_candidate = self._apply_case(case_class, candidate)
+            
+            if fixed_candidate not in suggestions:
+                candidate_lower = candidate.lower()
+                
+                # Calculate values like COF
+                if lower_word == candidate_lower:
+                    # Exact match gets F_SAME weight
+                    vals = [F_SAME, 1]
+                elif priority == 1:
+                    # User exceptions
+                    vals = [F_USER_EXC, 0] 
+                elif priority == 2:
+                    # System errors
+                    vals = [F_ERRS, 0]
+                elif priority == 3:
+                    # RadixTree - use frequency + edit distance 1
+                    frequency = self._get_frequency(candidate)
+                    vals = [frequency, 1]
+                elif priority == 4:
+                    # User dict - use F_USER_DICT + levenshtein
+                    distance = self._levenshtein(lower_word, candidate_lower)
+                    vals = [F_USER_DICT, distance]
+                else:  # priority == 5
+                    # System phonetic - use frequency + levenshtein
+                    frequency = self._get_frequency(candidate)
+                    distance = self._levenshtein(lower_word, candidate_lower)
+                    vals = [frequency, distance]
+                
+                suggestions[fixed_candidate] = vals
+                
+        return suggestions
+    
+    def _cof_handle_apostrophes(self, word: str, lower_word: str, case_class: CaseClass, 
+                               base_suggestions: Dict[str, List]) -> Dict[str, List]:
+        """
+        Handle apostrophe contractions like COF's _build_suggestions.
+        
+        Handles d', un', l' patterns exactly like COF.
+        """
+        suggestions = base_suggestions.copy()
+        
+        # Handle d' prefix (pos=2)
+        if len(lower_word) > 2 and lower_word.startswith("d'"):
+            suffix_word = word[2:]
+            suffix_lower = lower_word[2:]
+            
+            # Create answer object for suffix
+            suffix_suggestions = self._cof_basic_suggestions(suffix_word, suffix_lower, self._classify_case(suffix_word))
+            
+            # Determine case for 'di'
+            if case_class == CaseClass.UPPER:
+                prefix = 'DI '
+            elif case_class == CaseClass.UCFIRST or (len(word) > 0 and word[0].isupper()):
+                prefix = 'Di '
+            else:
+                prefix = 'di '
+                
+            # Add combined suggestions
+            for suffix_candidate, vals in suffix_suggestions.items():
+                combined = prefix + suffix_candidate
+                # Increment distance by 1 as per COF
+                suggestions[combined] = [vals[0], vals[1] + 1]
+        
+        # Handle un' prefix (pos=3) 
+        elif len(lower_word) > 3 and lower_word.startswith("un'"):
+            suffix_word = word[3:]
+            suffix_lower = lower_word[3:]
+            
+            suffix_suggestions = self._cof_basic_suggestions(suffix_word, suffix_lower, self._classify_case(suffix_word))
+            
+            # Determine case for 'une'
+            if case_class == CaseClass.UPPER:
+                prefix = 'UNE '
+            elif case_class == CaseClass.UCFIRST or (len(word) > 0 and word[0].isupper()):
+                prefix = 'Une '
+            else:
+                prefix = 'une '
+                
+            for suffix_candidate, vals in suffix_suggestions.items():
+                combined = prefix + suffix_candidate
+                suggestions[combined] = [vals[0], vals[1] + 1]
+        
+        # Handle l' prefix (pos=2) - MOST COMPLEX CASE
+        elif len(lower_word) > 2 and lower_word.startswith("l'"):
+            suffix_word = word[2:]
+            suffix_lower = lower_word[2:]
+            
+            suffix_suggestions = self._cof_basic_suggestions(suffix_word, suffix_lower, self._classify_case(suffix_word))
+            
+            # Determine case for prefixes
+            if case_class == CaseClass.UPPER:
+                prefix_ap = "L'"     # l' apostrophe form
+                prefix_no_ap = 'LA ' # la non-apostrophe form
+            elif case_class == CaseClass.UCFIRST or (len(word) > 0 and word[0].isupper()):
+                prefix_ap = "L'"
+                prefix_no_ap = 'La '
+            else:
+                prefix_ap = "l'"
+                prefix_no_ap = 'la '
+            
+            # For each suffix candidate, decide l' vs la based on elision
+            for suffix_candidate, vals in suffix_suggestions.items():
+                frequency, distance = vals
+                
+                # Get the dictionary form for elision check (3rd element in COF)
+                dict_form = suffix_candidate.lower()
+                
+                # Check if word supports elision using ElisionDatabase
+                try:
+                    has_elision = self.db.elision_db.has_elision(dict_form)
+                except (FileNotFoundError, AttributeError):
+                    # Fallback: assume no elision if database not available
+                    has_elision = False
+                
+                # Choose prefix based on elision rule
+                prefix = prefix_ap if has_elision else prefix_no_ap
+                combined = prefix + suffix_candidate
+                
+                # Distance increases by 1 as per COF
+                suggestions[combined] = [frequency, distance + 1]
+        
+        return suggestions
 
     def _add_radix_edit_distance_candidates(self, lower_word: str, candidates: Dict[str, Candidate]):
         """Add edit-distance-1 suggestions using RadixTree, matching COF's get_rt_sugg method.
@@ -234,28 +372,42 @@ class SuggestionEngine:
         return words
 
     def _get_error_corrections(self, word: str) -> List[str]:
+        """Get error corrections using the new ErrorDatabase."""
         results: List[str] = []
-        # Try exact + case variants similar to COF logic
-        variations = [word, word.lower(), word.capitalize(), word.upper()]
-        seen = set()
-        for v in variations:
-            if v in seen:
-                continue
-            seen.add(v)
-            cor = self.db.sqlite_db.find_in_system_errors_database(v)
-            if cor:
-                results.append(cor)
+        try:
+            # Use the new ErrorDatabase class for corrections
+            correction = self.db.error_db.get_error_correction(word)
+            if correction and correction != word:
+                results.append(correction)
+        except (FileNotFoundError, AttributeError):
+            # Fall back to old method if new database isn't available
+            variations = [word, word.lower(), word.capitalize(), word.upper()]
+            seen = set()
+            for v in variations:
+                if v in seen:
+                    continue
+                seen.add(v)
+                cor = self.db.sqlite_db.find_in_system_errors_database(v)
+                if cor:
+                    results.append(cor)
         return results
 
     def _get_frequency(self, word: str) -> int:
         if word in self._freq_cache:
             return self._freq_cache[word]
         try:
-            freq = self.db.sqlite_db.find_in_frequencies_database(word)
+            # Use the new FrequencyDatabase class
+            freq = self.db.frequency_db.get_frequency(word)
             if freq is None:
                 freq = 0
-        except FileNotFoundError:
-            freq = 0
+        except (FileNotFoundError, AttributeError):
+            # Fall back to old method if new database isn't available
+            try:
+                freq = self.db.sqlite_db.find_in_frequencies_database(word)
+                if freq is None:
+                    freq = 0
+            except FileNotFoundError:
+                freq = 0
         self._freq_cache[word] = int(freq)
         return self._freq_cache[word]
 
@@ -295,8 +447,9 @@ class SuggestionEngine:
                 # Check elision DB: if suffix is elidable keep l' variant else expanded form
                 if ap == "l'":
                     try:
-                        elidable = self.db.sqlite_db.has_elisions(suffix)
-                    except FileNotFoundError:
+                        elidable = self.db.elision_db.has_elision(suffix)
+                    except (FileNotFoundError, AttributeError):
+                        # If elision database isn't available, assume not elidable
                         elidable = False
                     if elidable:
                         # ensure original elided form ranks properly (prefer elided if exists)
@@ -438,12 +591,182 @@ class SuggestionEngine:
         except Exception:
             pass
         
-        # Check in frequency database
+        # Check in frequency database (using new FrequencyDatabase)
         try:
-            freq = self.db.sqlite_db.find_word_frequency(word)
-            if freq is not None and freq > 0:
+            freq = self.db.frequency_db.get_frequency(word)
+            if freq > 0:
                 return True
-        except Exception:
-            pass
+        except (FileNotFoundError, AttributeError):
+            # Fall back to old method
+            try:
+                freq = self.db.sqlite_db.find_word_frequency(word)
+                if freq is not None and freq > 0:
+                    return True
+            except Exception:
+                pass
         
         return False
+
+    # -------- Enhanced Database Methods (COF Integration) --------
+    def _add_elision_candidates(self, word: str, candidates: Dict[str, Candidate]) -> None:
+        """Add elision-based candidates using ElisionDatabase.
+        
+        Adds variants like l'/la, d'/di, un'/une based on elision rules.
+        Equivalent to COF's elision handling logic.
+        """
+        lower_word = word.lower()
+        
+        try:
+            # Get elision candidates from the database
+            elision_candidates = self.db.elision_db.get_elision_candidates(lower_word)
+            
+            for candidate in elision_candidates:
+                if candidate and candidate not in candidates:
+                    # Calculate edit distance
+                    distance = self._levenshtein(lower_word, candidate.lower())
+                    
+                    # Elision variants get moderate priority (between errors and phonetic)
+                    base_weight = 250 if candidate.lower() != lower_word else F_SAME
+                    
+                    candidates[candidate.lower()] = Candidate(
+                        word=candidate,
+                        base_weight=base_weight,
+                        distance=distance,
+                        original_freq=self._get_frequency(candidate),
+                    )
+                    
+        except (FileNotFoundError, AttributeError):
+            # If ElisionDatabase not available, fall back to basic logic
+            pass
+
+    def _add_error_pattern_candidates(self, word: str, candidates: Dict[str, Candidate]) -> None:
+        """Add error pattern correction candidates using ErrorDatabase.
+        
+        Finds corrections for common Friulian spelling errors.
+        Equivalent to COF's error pattern matching.
+        """
+        try:
+            # Get error correction from the database
+            correction = self.db.error_db.get_error_correction(word)
+            
+            if correction and correction != word:
+                lower_correction = correction.lower()
+                lower_word = word.lower()
+                
+                if lower_correction not in candidates:
+                    distance = self._levenshtein(lower_word, lower_correction)
+                    
+                    # Error corrections get high priority
+                    base_weight = F_ERRS if lower_correction != lower_word else F_SAME
+                    
+                    candidates[lower_correction] = Candidate(
+                        word=correction,
+                        base_weight=base_weight,
+                        distance=distance,
+                        original_freq=self._get_frequency(correction),
+                    )
+                    
+        except (FileNotFoundError, AttributeError):
+            # If ErrorDatabase not available, fall back to existing logic
+            pass
+
+    def rank_suggestions_by_frequency(self, suggestions: List[str]) -> List[Tuple[str, int]]:
+        """Rank suggestions by frequency score using FrequencyDatabase.
+        
+        Args:
+            suggestions: List of word suggestions
+            
+        Returns:
+            List of (word, frequency) tuples sorted by frequency
+        """
+        try:
+            return self.db.frequency_db.rank_suggestions(suggestions)
+        except (FileNotFoundError, AttributeError):
+            # Fall back to basic frequency lookup
+            ranked = []
+            for suggestion in suggestions:
+                frequency = self._get_frequency(suggestion)
+                ranked.append((suggestion, frequency))
+            
+            # Sort by frequency (descending) then alphabetically
+            ranked.sort(key=lambda x: (-x[1], x[0]))
+            return ranked
+    
+    def _cof_handle_hyphens(self, word: str, suggestions: Dict[str, List]) -> Dict[str, List]:
+        """
+        Handle hyphenated words like COF's hyphen logic.
+        """
+        if "-" not in word:
+            return suggestions
+            
+        # Split on first hyphen only
+        parts = word.split("-", 1)
+        if len(parts) != 2:
+            return suggestions
+            
+        left_word, right_word = parts
+        
+        # Get suggestions for both parts
+        left_lower = left_word.lower()
+        right_lower = right_word.lower()
+        
+        left_suggestions = self._cof_basic_suggestions(left_word, left_lower, self._classify_case(left_word))
+        right_suggestions = self._cof_basic_suggestions(right_word, right_lower, self._classify_case(right_word))
+        
+        # Combine all possibilities
+        for left_candidate, left_vals in left_suggestions.items():
+            for right_candidate, right_vals in right_suggestions.items():
+                combined = f"{left_candidate} {right_candidate}"
+                # Add frequencies and distances
+                combined_vals = [
+                    left_vals[0] + right_vals[0],  # frequency sum
+                    left_vals[1] + right_vals[1]   # distance sum
+                ]
+                suggestions[combined] = combined_vals
+        
+        return suggestions
+    
+    def _cof_rank_suggestions(self, suggestions: Dict[str, List], case_class: CaseClass) -> List[str]:
+        """
+        Rank suggestions exactly like COF's suggest method.
+        
+        COF ranking: first by frequency (desc), then by distance (asc), then friulian sort.
+        """
+        if not suggestions:
+            return []
+            
+        # Convert to COF's format for sorting
+        words_list = list(suggestions.keys())
+        
+        # Sort using COF's friulian sort (basic for now)
+        words_list = self._friulian_sort(words_list)
+        
+        # Build COF's peso structure: {frequency: {distance: [indices]}}
+        peso = {}
+        
+        for idx, word in enumerate(words_list):
+            frequency, distance = suggestions[word]
+            
+            if frequency not in peso:
+                peso[frequency] = {}
+            if distance not in peso[frequency]:
+                peso[frequency][distance] = []
+                
+            peso[frequency][distance].append(idx)
+        
+        # Sort exactly like COF: frequency desc, distance asc
+        ranked_words = []
+        
+        for freq in sorted(peso.keys(), reverse=True):  # frequency descending
+            for dist in sorted(peso[freq].keys()):     # distance ascending
+                for idx in peso[freq][dist]:
+                    ranked_words.append(words_list[idx])
+        
+        return ranked_words[:self.max_suggestions]
+    
+    def _friulian_sort(self, words: List[str]) -> List[str]:
+        """
+        Basic Friulian sort (placeholder - COF has more complex logic).
+        """
+        # For now, just use standard sort - can enhance later with COF's sort_friulian
+        return sorted(words, key=str.lower)
