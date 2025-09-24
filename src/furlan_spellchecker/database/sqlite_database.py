@@ -105,7 +105,7 @@ class SQLiteKeyValueDatabase(IKeyValueDatabase):
         
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM Data WHERE Word = ?", (word,))
+            cursor.execute("SELECT * FROM Data WHERE Key = ?", (word,))
             return cursor.fetchone() is not None
     
     def add_to_user_database(self, word: str) -> AddWordResult:
