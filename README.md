@@ -119,8 +119,26 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 1. Clone the repository
 2. Install development dependencies: `pip install -e ".[dev]"`
 3. Run tests: `pytest`
+   - Run specific test modules: `pytest tests/test_radix_tree.py -v`
+   - Run performance tests: `pytest tests/test_radix_tree.py -m slow -v`
+   - Skip slow tests: `pytest -m "not slow"`
 4. Run linting: `ruff check src tests`
 5. Run type checking: `mypy src`
+
+### Test Suite
+
+The project includes comprehensive test coverage with special focus on:
+
+- **COF Compatibility**: RadixTree tests ensure 1:1 compatibility with original COF implementation
+- **Edge Case Testing**: Comprehensive handling of empty input, special characters, and invalid data
+- **Performance Testing**: Batch processing and stress testing for production readiness
+- **Integration Testing**: End-to-end testing with DatabaseManager and other components
+
+**RadixTree Test Coverage** (24 tests total):
+- **COF Compatibility** (13 tests): Core suggestion matching with verified test cases
+- **Edge Cases** (7 tests): Friulian-specific character handling (cjàse, furlanâ, çi)
+- **Performance** (2 tests): Batch processing and stress testing benchmarks  
+- **Integration** (2 tests): DatabaseManager integration and availability checks
 
 ## License
 
