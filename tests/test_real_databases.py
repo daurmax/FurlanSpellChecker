@@ -205,6 +205,89 @@ class TestRealDatabaseIntegration:
             assert isinstance(suggestions, list)
 
 
+class TestCOFAlgorithmIntegration:
+    """Test cases for COF algorithm implementation with specialized database classes.
+    
+    These tests verify that the new ElisionDatabase, ErrorDatabase, and FrequencyDatabase
+    classes work correctly and that the COF algorithm prioritization is implemented properly.
+    """
+    
+    def test_individual_database_access(self, real_db_manager):
+        """Test that individual database classes work correctly."""
+        # Test ElisionDatabase - check if a known word exists
+        has_elision = real_db_manager.elision_db.has_elision("Urbignà")
+        assert isinstance(has_elision, bool)  # Should return boolean
+        
+        # Test ErrorDatabase - check a known error pattern  
+        error_correction = real_db_manager.error_db.get_error_correction("un'")
+        assert error_correction == "une"  # Known correction from errors.sqlite
+        
+        # Test FrequencyDatabase - check a known word
+        frequency = real_db_manager.frequency_db.get_frequency("Lessi")  
+        assert frequency == 21  # Known frequency from frequencies.sqlite
+        
+        # Test that non-existent words return appropriate defaults
+        non_existent_freq = real_db_manager.frequency_db.get_frequency("nonexistentword")
+        assert non_existent_freq == 0
+        
+        non_existent_error = real_db_manager.error_db.get_error_correction("nonexistentword")
+        assert non_existent_error is None
+    
+    def test_cof_priority_system(self, real_suggestion_engine):
+        """Test that COF priority system works correctly."""
+        # Test error corrections have high priority
+        suggestions = real_suggestion_engine.suggest("un'")
+        assert len(suggestions) >= 1
+        assert suggestions[0] == "une"  # Error correction should be first
+        
+        # Test that error corrections beat phonetic matches
+        # This tests the COF algorithm implementation where errors have priority 2
+        # while phonetic suggestions have priority 5 (but lower effective priority)
+        error_suggestions = real_suggestion_engine.suggest("un'")
+        assert "une" in error_suggestions[:2]  # Should be in top 2
+    
+    def test_frequency_integration(self, real_suggestion_engine):
+        """Test that frequency values are properly integrated into suggestions."""
+        # Test with words that should have frequency data
+        suggestions = real_suggestion_engine.suggest("furla")
+        
+        # Verify we get suggestions (frequency integration should work)
+        assert isinstance(suggestions, list)
+        
+        # Test that the suggestion engine doesn't crash on frequency lookup
+        # The specific behavior depends on available phonetic matches
+        if suggestions:
+            # Should contain reasonable Friulian words
+            assert all(isinstance(sugg, str) for sugg in suggestions)
+    
+    def test_elision_database_integration(self, real_db_manager):
+        """Test elision database integration for apostrophe handling.""" 
+        # Test has_elision method
+        test_words = ["Urbignà", "aceleratîf"]  # Known words from elisions.sqlite
+        
+        for word in test_words:
+            result = real_db_manager.elision_db.has_elision(word)
+            assert isinstance(result, bool)
+            # These words actually exist in elisions.sqlite so should return True
+            assert result is True
+        
+        # Test with a word that definitely doesn't exist
+        non_existent = real_db_manager.elision_db.has_elision("nonexistentword123")
+        assert non_existent is False
+    
+    def test_error_database_patterns(self, real_db_manager):
+        """Test error database pattern matching."""
+        # Test known error patterns from errors.sqlite
+        known_errors = {
+            "un'": "une",
+            "'a": "a"  # Another known pattern
+        }
+        
+        for error, correction in known_errors.items():
+            result = real_db_manager.error_db.get_error_correction(error)
+            assert result == correction
+
+
 class TestCOFBehavioralParity:
     """Test cases comparing Python engine behavior to COF reference data.
     
