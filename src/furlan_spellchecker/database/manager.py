@@ -6,6 +6,9 @@ from typing import Optional, Dict
 from .interfaces import IKeyValueDatabase, IRadixTree, DictionaryType
 from .sqlite_database import SQLiteKeyValueDatabase
 from .radix_tree import RadixTreeDatabase
+from .elision import ElisionDatabase
+from .error import ErrorDatabase
+from .frequency import FrequencyDatabase
 from ..config.schemas import FurlanSpellCheckerConfig
 
 
@@ -17,6 +20,9 @@ class DatabaseManager:
         self.config = config or FurlanSpellCheckerConfig()
         self._sqlite_db: Optional[SQLiteKeyValueDatabase] = None
         self._radix_tree: Optional[RadixTreeDatabase] = None
+        self._elision_db: Optional[ElisionDatabase] = None
+        self._error_db: Optional[ErrorDatabase] = None
+        self._frequency_db: Optional[FrequencyDatabase] = None
         self._cache_dir = self._get_cache_directory()
     
     def _get_cache_directory(self) -> Path:
@@ -50,6 +56,30 @@ class DatabaseManager:
             radix_tree_path = self._cache_dir / "words_radix_tree" / "words.rt"
             self._radix_tree = RadixTreeDatabase(radix_tree_path)
         return self._radix_tree
+    
+    @property
+    def elision_db(self) -> ElisionDatabase:
+        """Get elision database instance."""
+        if self._elision_db is None:
+            elision_db_path = self._cache_dir / "elisions" / "elisions.sqlite"
+            self._elision_db = ElisionDatabase(elision_db_path)
+        return self._elision_db
+    
+    @property
+    def error_db(self) -> ErrorDatabase:
+        """Get error database instance."""
+        if self._error_db is None:
+            error_db_path = self._cache_dir / "errors" / "errors.sqlite"
+            self._error_db = ErrorDatabase(error_db_path)
+        return self._error_db
+    
+    @property
+    def frequency_db(self) -> FrequencyDatabase:
+        """Get frequency database instance."""
+        if self._frequency_db is None:
+            frequency_db_path = self._cache_dir / "frequencies" / "frequencies.sqlite"
+            self._frequency_db = FrequencyDatabase(frequency_db_path)
+        return self._frequency_db
     
     def ensure_databases_available(self) -> Dict[DictionaryType, bool]:
         """Check which databases are available."""

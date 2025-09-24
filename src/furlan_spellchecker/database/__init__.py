@@ -11,6 +11,9 @@ from .interfaces import DictionaryType, AddWordResult, IKeyValueDatabase, IRadix
 # Import implementations
 from .sqlite_database import SQLiteKeyValueDatabase
 from .radix_tree import BinaryRadixTree, RadixTreeDatabase
+from .elision import ElisionDatabase
+from .error import ErrorDatabase
+from .frequency import FrequencyDatabase
 from .manager import DatabaseManager
 
 __all__ = [
@@ -20,6 +23,9 @@ __all__ = [
     'IRadixTree',
     'SQLiteKeyValueDatabase',
     'BinaryRadixTree',
-    'RadixTreeDatabase', 
+    'RadixTreeDatabase',
+    'ElisionDatabase',
+    'ErrorDatabase', 
+    'FrequencyDatabase',
     'DatabaseManager'
 ]
