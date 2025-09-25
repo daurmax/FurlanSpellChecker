@@ -16,9 +16,14 @@ class CompatibilityTester:
     def test_word_check(self, word: str) -> Dict[str, Any]:
         """Test word checking."""
         try:
+            import os
+            env = os.environ.copy()
+            env['PYTHONIOENCODING'] = 'utf-8'
+            
             result = subprocess.run([
                 sys.executable, "-m", "furlan_spellchecker", "lookup", word
-            ], capture_output=True, text=True, cwd=Path.cwd())
+            ], capture_output=True, text=True, encoding='utf-8', 
+               env=env, cwd=Path.cwd())
             
             # Parse the output to determine if word is correct
             is_correct = "✓" in result.stdout or "found in dictionary" in result.stdout.lower()
@@ -40,9 +45,14 @@ class CompatibilityTester:
     def test_word_suggestions(self, word: str) -> List[str]:
         """Test word suggestions."""
         try:
+            import os
+            env = os.environ.copy()
+            env['PYTHONIOENCODING'] = 'utf-8'
+            
             result = subprocess.run([
                 sys.executable, "-m", "furlan_spellchecker", "suggest", word
-            ], capture_output=True, text=True, cwd=Path.cwd())
+            ], capture_output=True, text=True, encoding='utf-8',
+               env=env, cwd=Path.cwd())
             
             # Parse suggestions from output
             suggestions = []
@@ -157,17 +167,17 @@ if __name__ == "__main__":
     results = tester.test_words_from_file(word_file)
     
     # Save results
-    output_file = Path("tests/assets/furlan_spellchecker_results.json")
+    output_file = Path("tests/results/furlan_spellchecker_results.json")
     tester.save_results(results, output_file)
     print(f"\n💾 Results saved to: {output_file}")
     
     # Compare with reference if available
-    reference_file = Path("tests/assets/cof_reference_results.json")
+    reference_file = Path("tests/results/cof_reference_results.json")
     if reference_file.exists():
         matches, mismatches = tester.compare_with_reference(results, reference_file)
         
         # Save comparison
-        comparison_file = Path("tests/assets/compatibility_comparison.json")
+        comparison_file = Path("tests/results/compatibility_comparison.json")
         with open(comparison_file, 'w', encoding='utf-8') as f:
             json.dump({
                 "summary": {
