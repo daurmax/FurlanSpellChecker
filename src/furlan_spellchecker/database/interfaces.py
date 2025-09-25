@@ -23,6 +23,23 @@ class AddWordResult(Enum):
     ERROR = "error"
 
 
+class RemoveWordResult(Enum):
+    """Results of removing a word from user dictionary."""
+    SUCCESS = "success"
+    NOT_FOUND = "not_found"
+    DATABASE_NOT_EXISTS = "database_not_exists"
+    ERROR = "error"
+
+
+class AddExceptionResult(Enum):
+    """Results of adding an exception."""
+    SUCCESS = "success"
+    UPDATED = "updated"
+    INVALID_INPUT = "invalid_input"
+    DATABASE_NOT_EXISTS = "database_not_exists"
+    ERROR = "error"
+
+
 class IKeyValueDatabase(ABC):
     """Interface for key-value database operations."""
     
@@ -59,6 +76,46 @@ class IKeyValueDatabase(ABC):
     @abstractmethod
     def add_to_user_database(self, word: str) -> AddWordResult:
         """Add word to user dictionary."""
+        pass
+    
+    @abstractmethod
+    def remove_from_user_database(self, word: str) -> RemoveWordResult:
+        """Remove word from user dictionary."""
+        pass
+    
+    @abstractmethod
+    def add_user_exception(self, error_word: str, correction: str) -> AddExceptionResult:
+        """Add error -> correction pair to user exceptions."""
+        pass
+    
+    @abstractmethod
+    def remove_user_exception(self, error_word: str) -> RemoveWordResult:
+        """Remove exception from user exceptions."""
+        pass
+    
+    @abstractmethod
+    def get_user_dictionary_suggestions(self, word: str, max_suggestions: int = 10) -> List[str]:
+        """Get phonetic suggestions from user dictionary."""
+        pass
+    
+    @abstractmethod
+    def remove_from_user_database(self, word: str) -> RemoveWordResult:
+        """Remove word from user dictionary."""
+        pass
+    
+    @abstractmethod
+    def add_user_exception(self, error_word: str, correction: str) -> AddExceptionResult:
+        """Add error -> correction pair to user exceptions."""
+        pass
+    
+    @abstractmethod
+    def remove_user_exception(self, error_word: str) -> RemoveWordResult:
+        """Remove exception from user exceptions."""
+        pass
+    
+    @abstractmethod
+    def get_user_dictionary_suggestions(self, word: str, max_suggestions: int = 10) -> List[str]:
+        """Get phonetic suggestions from user dictionary."""
         pass
 
 

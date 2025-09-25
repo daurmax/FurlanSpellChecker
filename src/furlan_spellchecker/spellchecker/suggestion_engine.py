@@ -119,8 +119,14 @@ class SuggestionEngine:
         for word_candidate in phonetic_sys:
             temp_candidates[word_candidate] = 5
             
-        # 2. Phonetic suggestions (user dict) - priority 4 (placeholder for future)
-        # if self.db has user dict: temp_candidates[word_candidate] = 4
+        # 2. Phonetic suggestions (user dict) - priority 4 
+        try:
+            user_phonetic = self.db.key_value_db.get_user_dictionary_suggestions(lower_word, max_suggestions=50)
+            for word_candidate in user_phonetic:
+                if word_candidate and word_candidate not in temp_candidates:
+                    temp_candidates[word_candidate] = 4
+        except Exception:
+            pass
         
         # 3. RadixTree suggestions - priority 3  
         try:
@@ -142,8 +148,13 @@ class SuggestionEngine:
             for correction in error_corrections:
                 temp_candidates[correction] = 2
         
-        # 5. User error corrections - priority 1 (placeholder for future)
-        # if self.db has user exceptions: temp_candidates[correction] = 1
+        # 5. User error corrections - priority 1 (highest priority)
+        try:
+            user_correction = self.db.key_value_db.find_in_user_errors_database(word)
+            if user_correction:
+                temp_candidates[user_correction] = 1
+        except Exception:
+            pass
         
         # Convert to COF's final format: {word: [frequency_or_weight, distance]}
         for candidate, priority in temp_candidates.items():

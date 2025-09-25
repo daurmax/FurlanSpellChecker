@@ -4,7 +4,11 @@ import sqlite3
 from pathlib import Path
 from typing import Optional, List, Tuple, Dict
 
-from .interfaces import IKeyValueDatabase, DictionaryType, AddWordResult
+from .interfaces import (
+    IKeyValueDatabase, DictionaryType, AddWordResult, RemoveWordResult, AddExceptionResult
+)
+from .user_dictionary import UserDictionaryDatabase
+from .user_exceptions import UserExceptionsDatabase
 from ..config.schemas import FurlanSpellCheckerConfig
 
 
@@ -15,6 +19,14 @@ class SQLiteKeyValueDatabase(IKeyValueDatabase):
         """Initialize with configuration for database paths."""
         self.config = config or FurlanSpellCheckerConfig()
         self._db_paths = self._get_database_paths()
+        
+        # Initialize user databases
+        self._user_dictionary = UserDictionaryDatabase(
+            self._db_paths[DictionaryType.USER_DICTIONARY]
+        )
+        self._user_exceptions = UserExceptionsDatabase(
+            self._db_paths[DictionaryType.USER_ERRORS]
+        )
     
     def _get_database_paths(self) -> Dict[DictionaryType, Path]:
         """Get paths for each database type based on configuration."""
@@ -43,21 +55,12 @@ class SQLiteKeyValueDatabase(IKeyValueDatabase):
     
     def find_in_user_database(self, phonetic_hash: str) -> Optional[str]:
         """Find value in user dictionary by phonetic hash."""
-        db_path = self._db_paths[DictionaryType.USER_DICTIONARY]
-        if not db_path.exists():
-            self._create_user_database()
-        
-        return self._find_in_database(
-            db_path, DictionaryType.USER_DICTIONARY, phonetic_hash, search_for_errors=False
-        )
+        words = self._user_dictionary.get_words_by_phonetic_code(phonetic_hash)
+        return ','.join(words) if words else None
     
     def find_in_user_errors_database(self, word: str) -> Optional[str]:
         """Find correction in user errors database."""
-        db_path = self._db_paths[DictionaryType.USER_ERRORS]
-        # User errors DB is optional; if missing just return None
-        if not db_path.exists():
-            return None
-        return self._find_in_database(db_path, DictionaryType.USER_ERRORS, word, search_for_errors=True)
+        return self._user_exceptions.get_correction(word)
     
     def find_in_system_database(self, phonetic_hash: str) -> Optional[str]:
         """Find value in system dictionary by phonetic hash."""
@@ -111,40 +114,62 @@ class SQLiteKeyValueDatabase(IKeyValueDatabase):
     def add_to_user_database(self, word: str) -> AddWordResult:
         """Add word to user dictionary."""
         if not word:
-            return AddWordResult.DATABASE_NOT_EXISTS
-        
-        # Import here to avoid circular dependency
-        from ..phonetic.furlan_phonetic import FurlanPhoneticAlgorithm
-        
-        db_path = self._db_paths[DictionaryType.USER_DICTIONARY]
-        if not db_path.exists():
-            self._create_user_database()
+            return AddWordResult.ERROR
         
         try:
-            with sqlite3.connect(db_path) as conn:
-                cursor = conn.cursor()
-                phonetic_algo = FurlanPhoneticAlgorithm()
-                hash_a, hash_b = phonetic_algo.get_phonetic_hashes_by_word(word)
-                hashes_to_process = [hash_a] if hash_a == hash_b else [hash_a, hash_b]
-
-                for phonetic_hash in hashes_to_process:
-                    # Query within the same connection to avoid nested connection handles on Windows
-                    cursor.execute("SELECT Value FROM Data WHERE Key = ?", (phonetic_hash,))
-                    row = cursor.fetchone()
-                    existing_word = row[0] if row else None
-
-                    if existing_word is None:
-                        cursor.execute("INSERT INTO Data (Key, Value) VALUES (?, ?)", (phonetic_hash, word))
-                    elif existing_word != word:
-                        new_word_list = f"{existing_word},{word}"
-                        cursor.execute("UPDATE Data SET Value = ? WHERE Key = ?", (new_word_list, phonetic_hash))
-                    else:
-                        return AddWordResult.ALREADY_PRESENT
-
-                conn.commit()
-                return AddWordResult.SUCCESS
+            success = self._user_dictionary.add_word(word)
+            return AddWordResult.SUCCESS if success else AddWordResult.ALREADY_PRESENT
         except Exception:
             return AddWordResult.ERROR
+    
+    def remove_from_user_database(self, word: str) -> RemoveWordResult:
+        """Remove word from user dictionary."""
+        if not word:
+            return RemoveWordResult.ERROR
+        
+        try:
+            success = self._user_dictionary.remove_word(word)
+            return RemoveWordResult.SUCCESS if success else RemoveWordResult.NOT_FOUND
+        except Exception:
+            return RemoveWordResult.ERROR
+    
+    def add_user_exception(self, error_word: str, correction: str) -> AddExceptionResult:
+        """Add error -> correction pair to user exceptions."""
+        if not error_word or not correction:
+            return AddExceptionResult.INVALID_INPUT
+        
+        try:
+            # Check if exception already exists
+            existing = self._user_exceptions.get_correction(error_word)
+            success = self._user_exceptions.add_exception(error_word, correction)
+            
+            if success:
+                return AddExceptionResult.UPDATED if existing else AddExceptionResult.SUCCESS
+            else:
+                return AddExceptionResult.INVALID_INPUT
+        except Exception:
+            return AddExceptionResult.ERROR
+    
+    def remove_user_exception(self, error_word: str) -> RemoveWordResult:
+        """Remove exception from user exceptions."""
+        if not error_word:
+            return RemoveWordResult.ERROR
+        
+        try:
+            success = self._user_exceptions.remove_exception(error_word)
+            return RemoveWordResult.SUCCESS if success else RemoveWordResult.NOT_FOUND
+        except Exception:
+            return RemoveWordResult.ERROR
+    
+    def get_user_dictionary_suggestions(self, word: str, max_suggestions: int = 10) -> List[str]:
+        """Get phonetic suggestions from user dictionary."""
+        if not word:
+            return []
+        
+        try:
+            return self._user_dictionary.get_phonetic_suggestions(word, max_suggestions)
+        except Exception:
+            return []
     
     def _find_in_database(
         self, 
